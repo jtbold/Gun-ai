@@ -408,6 +408,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     // --- END PRICING LOGIC ---
                     
                     // --- Display Report (For User View) ---
+                    // REMOVED DISCLAIMER from visible HTML
                     const reportHtml = `
                         <div class="p-4 bg-gray-50 rounded-lg"><p class="font-bold">Model:</p><p>${report.modelGuess}</p></div>
                         <div><h3 class="font-semibold text-lg text-gray-800">Identification</h3><p class="text-gray-700">${report.identification}</p></div>
@@ -441,6 +442,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     reportContent.innerHTML = reportHtml;
 
                     // --- NEW: Simplified content for Print View (Crucial for PDF stability) ---
+                    // MOVED DISCLAIMER OUT OF THIS BLOCK (it's too long)
                     printViewContent.innerHTML = `
                         <div style="padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1rem; text-align: center;">
                             <h3 style="font-size: 1.25rem; font-weight: bold; color: #d97706; margin: 0 auto 0.5rem;">Dealer Logo</h3>
@@ -482,7 +484,6 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                         </div>
                         
                         <div style="margin-bottom: 1rem;"><h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Condition</h3><p style="color: #4b5563;">${report.conditionNotes}</p></div>
-                        <div style="padding: 1rem; margin-top: 1rem; background-color: #fffbeb; font-size: 0.875rem; color: #92400e; border-radius: 8px;"><p><strong>Disclaimer:</strong> ${report.disclaimer}</p></div>
                     `;
                     
                     reportContainer.style.display = 'block';
@@ -523,8 +524,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             setTimeout(async () => {
                 const { jsPDF } = window.jspdf;
                 
-                // --- FIX 5: Create a temporary, dynamic container for reliable capture ---
-                // This eliminates the chance of state conflicts with the existing off-screen element
+                // --- Create a temporary, dynamic container for reliable capture ---
                 const tempContainer = document.createElement('div');
                 tempContainer.style.position = 'absolute';
                 tempContainer.style.left = '-9999px';
@@ -556,7 +556,6 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     
                     // 1. Capture the temporary container (Page 1 - Report Content)
                     const reportCanvas = await html2canvas(tempContainer, { 
-                        // Using a scale of 2 for stable quality
                         scale: 2, 
                         width: tempContainer.offsetWidth,
                         useCORS: true,
@@ -566,48 +565,24 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
                     const reportRatio = reportCanvas.width / reportCanvas.height;
                     
-                    // FIX: Recalculate dimensions based on page margins
+                    // Recalculate dimensions based on page margins
                     const reportPdfWidth = pageWidth - margin * 2;
                     const reportPdfHeight = reportPdfWidth / reportRatio;
                     let currentYPos = margin;
                     
-                    // --- FIX: Implement auto-page splitting for the main report image ---
-                    const imgHeight = reportPdfHeight;
-                    const pageBoundary = pageHeight - margin * 2;
-                    let position = 0;
+                    // --- FIX: Add the report image without slicing, letting it fill one page ---
+                    // This relies on the content being short enough (after removing the long disclaimer)
+                    doc.addImage(
+                        reportImgData, 
+                        'JPEG', 
+                        margin, 
+                        currentYPos, 
+                        reportPdfWidth, 
+                        reportPdfHeight
+                    );
+                    addFooter(doc, margin, pageHeight);
                     
-                    while (position < imgHeight) {
-                        if (position > 0) {
-                            doc.addPage();
-                        }
-                        
-                        // Calculate the height of the slice on this page
-                        let sliceHeight = Math.min(pageBoundary, imgHeight - position);
-                        
-                        // Calculate the negative offset to show the correct part of the image
-                        let imgOffset = -position * reportPdfWidth / reportCanvas.width;
-                        
-                        // Calculate the width/height of the PDF viewport for the slice
-                        let slicePdfHeight = (sliceHeight * reportCanvas.width) / reportPdfWidth;
-                        
-                        doc.addImage(
-                            reportImgData, 
-                            'JPEG', 
-                            margin, 
-                            margin + imgOffset, // Apply negative offset
-                            reportPdfWidth, 
-                            reportPdfHeight // Use full image height to enable slicing
-                        );
-                        
-                        // Move to the next slice position
-                        position += pageBoundary;
-                        
-                        addFooter(doc, margin, pageHeight);
-                    }
-                    // --- END AUTO-PAGE SPLITTING FIX ---
-                    
-                    
-                    // 2. Add Valuation Methodology and Sources Page
+                    // 2. Add Valuation Methodology, Sources, AND DISCLAIMER (Page 2)
                     const methodologyTitle = "Valuation Methodology and Sources";
                     const methodologyText = `
 The final retail valuation is determined using a two-step process:
@@ -615,8 +590,10 @@ The final retail valuation is determined using a two-step process:
 2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / 0.65). The resulting figure is then rounded up to the nearest \$5.00 to reflect typical retail pricing practices.
 The following online sources were referenced by the LLM in real-time to generate the identification details and the estimated wholesale price:
 `;
+                    const disclaimerText = reportData.disclaimer;
                     let sourceList = reportData.sources || [];
-                    
+
+                    // Start Page 2
                     doc.addPage();
                     currentYPos = margin;
                     
@@ -627,7 +604,7 @@ The following online sources were referenced by the LLM in real-time to generate
                     let textLines = doc.splitTextToSize(methodologyText, pageWidth - margin * 2);
                     doc.text(textLines, margin, currentYPos);
                     currentYPos += textLines.length * 4.5;
-                    
+
                     // Print Sources
                     doc.setFontSize(10); doc.setTextColor(50); doc.setFont("helvetica", "bold"); doc.text("Referenced Sources:", margin, currentYPos);
                     currentYPos += 5; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -646,6 +623,21 @@ The following online sources were referenced by the LLM in real-time to generate
                         doc.text(sourceLines, margin, currentYPos);
                         currentYPos += sourceLines.length * 4.5;
                     });
+                    
+                    // Print Disclaimer (Moved to Page 2 for fit)
+                    currentYPos += 10;
+                    doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "bold"); doc.text("Disclaimer:", margin, currentYPos);
+                    currentYPos += 5;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    let disclaimerLines = doc.splitTextToSize(disclaimerText, pageWidth - margin * 2);
+                    
+                    // Final Page break check for disclaimer
+                    if (currentYPos + disclaimerLines.length * 4.5 > pageHeight - margin - 10) {
+                        doc.addPage();
+                        currentYPos = margin;
+                        addFooter(doc, margin, pageHeight);
+                    }
+                    doc.text(disclaimerLines, margin, currentYPos);
                     
                     addFooter(doc, margin, pageHeight);
                     
