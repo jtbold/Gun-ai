@@ -466,10 +466,98 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             };
             
             try {
-                // *** PDF Generation logic is complete in the actual file ***
-                // ...
+                // Get the model guess and sanitize it
+                const modelGuess = reportData.modelGuess || 'Unknown_Model';
+                const today = new Date();
+                const dateString = today.toISOString().split('T')[0];
+                const sanitizedFilename = modelGuess.replace(/[/\s]+/g, '_') + '_' + dateString + '_Report.pdf';
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 10; // Reduced margin for more space
                 
-                showMessage("PDF generation logic successfully completed.", 'info'); // Simplified status update
+                // 1. Convert the Report Content HTML to a Canvas Image
+                const reportCanvas = await html2canvas(reportElement, { 
+                    scale: 3,
+                    width: reportElement.offsetWidth 
+                }); 
+                const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
+                
+                // Calculate dimensions for PDF
+                const reportWidth = reportCanvas.width;
+                const reportHeight = reportCanvas.height;
+                const reportRatio = reportWidth / reportHeight;
+                const reportPdfWidth = pageWidth - margin * 2;
+                const reportPdfHeight = reportPdfWidth / reportRatio;
+                let currentYPos = margin;
+                
+                // Add the main report image (Page 1)
+                doc.addImage(reportImgData, 'JPEG', margin, currentYPos, reportPdfWidth, reportPdfHeight);
+                currentYPos += reportPdfHeight + 5; // Add vertical spacing
+                
+                // Footer added after main content 
+                addFooter(doc, margin, pageHeight);
+                
+                // 2. Add Methodology and Sources Page (Page 2)
+                const methodologyTitle = "Valuation Methodology and Sources";
+                const methodologyText = `
+The final retail valuation is determined using a two-step process:
+1. Wholesale/Purchase Offer: The 'Dealer Purchase Offer' is the raw Wholesale/Dealer Acquisition Price provided by the Large Language Model (LLM). This value represents the highest fair market trade-in value based on open-source and future proprietary data.
+Special Rule: If the Wholesale Value is $${LOW_VALUE_THRESHOLD.toFixed(2)} or less, the Dealer Purchase Offer is set to ${LOW_VALUE_RETAIL_OFFER_PERCENT * 100}% of the Projected Retail Value to ensure profitability on low-value items.
+The LLM uses real-time Google Search grounding to find this value, and the confidence level reflects the model's certainty in this acquired data.
+2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / ${RETAIL_MARKUP_DIVISOR}). The resulting figure is then rounded up to the nearest $5.00 to reflect typical retail pricing practices.
+The following online sources were referenced by the LLM in real-time to generate the identification details and the estimated wholesale price:
+`;
+                let sourceList = reportData.sources || [];
+                
+                // Add new page for sources
+                doc.addPage();
+                currentYPos = margin;
+                
+                // Print Title
+                doc.setFontSize(16);
+                doc.setTextColor(0);
+                doc.text(methodologyTitle, margin, currentYPos);
+                currentYPos += 10;
+                
+                // Print Methodology Text
+                doc.setFontSize(10);
+                doc.setTextColor(50);
+                doc.setFont("helvetica", "normal");
+                const reportPdfWidthMethodology = pageWidth - margin * 2;
+                let textLines = doc.splitTextToSize(methodologyText, reportPdfWidthMethodology);
+                doc.text(textLines, margin, currentYPos);
+                currentYPos += textLines.length * 4.5;
+                
+                // Print Sources
+                doc.setFontSize(10);
+                doc.setTextColor(50);
+                doc.setFont("helvetica", "bold");
+                doc.text("Referenced Sources:", margin, currentYPos);
+                currentYPos += 5;
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                
+                sourceList.forEach((source, index) => {
+                    const sourceText = `${index + 1}. ${source.title} (${source.uri})`;
+                    let sourceLines = doc.splitTextToSize(sourceText, reportPdfWidthMethodology);
+                    
+                    if (currentYPos + sourceLines.length * 4.5 > pageHeight - margin - 10) {
+                        doc.addPage();
+                        currentYPos = margin;
+                        doc.setFontSize(10);
+                        doc.text("Sources (Cont.):", margin, currentYPos);
+                        currentYPos += 5;
+                        addFooter(doc, margin, pageHeight); 
+                    }
+                    doc.text(sourceLines, margin, currentYPos);
+                    currentYPos += sourceLines.length * 4.5;
+                });
+                
+                addFooter(doc, margin, pageHeight);
+                
+                doc.save(sanitizedFilename);
+                showMessage("PDF download started!", 'info');
             } catch (error) {
                 console.error("PDF generation failed:", error);
                 showMessage("Failed to generate PDF. Please try again.", 'error');
