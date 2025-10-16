@@ -4,10 +4,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cabela's Valuation Tool</title>
     
-    <!-- Load Tailwind CSS framework -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Libraries for PDF Generation (html2canvas captures the HTML, jspdf creates the PDF) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
@@ -40,20 +38,23 @@
             box-sizing: border-box;
             visibility: hidden; /* Hide content from screen without display:none */
         }
-
+        
         /* Styles for the short content we want captured as an image (Page 1) */
         #page-one-capture {
             width: 800px;
-            padding: 0;
+            padding: 30px;
             margin: 0;
             background-color: white;
             box-sizing: border-box;
+            visibility: hidden; /* Hide from view until capture */
+            position: absolute; 
+            top: -9999px; 
+            left: -9999px;
         }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
     
-    <!-- Main Application Container -->
     <div class="container bg-white rounded-3xl shadow-xl p-4 sm:p-8 space-y-8">
         
         <header class="text-center">
@@ -63,12 +64,10 @@
             <p id="user-id" class="text-xs text-gray-400 mt-2"></p>
         </header>
         
-        <!-- Image Upload/Paste Area (CLEANED) -->
         <div id="drop-zone" class="w-full rounded-2xl border-4 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-gray-400">
             <div class="text-lg font-medium text-gray-700">Drag & drop, paste (Ctrl+V), or click to upload images</div>
             <p class="text-sm text-gray-400 mt-2">Maximum of 6 images, up to 4MB each. JPG and PNG are preferred.</p>
             <div class="file-input-wrapper mt-6">
-                <!-- File input is hidden but receives the native click event -->
                 <input type="file" id="file-input" accept="image/*" multiple>
                 <button id="upload-button" class="px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors pointer-events-none">
                     Choose Images
@@ -76,7 +75,6 @@
             </div>
         </div>
         
-        <!-- URL Input Section (CLEANED) -->
         <div class="w-full">
             <div class="flex flex-col gap-3">
                 <label for="url-input" class="text-sm font-medium text-gray-700">To add images from the internet, find an image, right-click it, and select "Copy Image Address". Then paste the URL below.</label>
@@ -89,7 +87,6 @@
             </div>
         </div>
         
-        <!-- User Notes Section -->
         <div class="w-full">
             <div class="flex flex-col gap-3">
                 <label for="notes-input" class="text-sm font-medium text-gray-700">Optional notes for identification (e.g., serial numbers, specific markings, history):</label>
@@ -97,10 +94,8 @@
             </div>
         </div>
         
-        <!-- Image Previews -->
         <div id="image-previews" class="flex flex-wrap gap-4 justify-center items-center p-4 rounded-xl bg-gray-50 shadow-inner" style="display: none;"></div>
         
-        <!-- Action Button and Status -->
         <div class="flex flex-col items-center justify-center space-y-4">
             <button id="generate-button" class="w-full px-8 py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                 Generate Report
@@ -111,11 +106,9 @@
             <div id="status-message" class="text-sm text-center text-gray-600"></div>
         </div>
 
-        <!-- Hidden containers to hold content -->
-        <div id="page-one-capture" style="display: none;"></div>
+        <div id="page-one-capture"></div>
         <div id="print-view-content"></div>
         
-        <!-- Report Display Section (Visible to User) -->
         <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display: none;">
             <div id="report-header">
                 <h3 class="text-xl font-bold text-yellow-600 mx-auto mb-2">Dealer Logo</h3>
@@ -126,7 +119,6 @@
         
     </div>
     
-    <!-- Firebase Scripts and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -464,7 +456,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     `;
                     reportContent.innerHTML = reportHtml;
 
-                    // --- NEW: CONTENT FOR PAGE 1 (SHORT, CAPTURED AS IMAGE) ---
+                    // --- NEW: CONTENT FOR PAGE 1 CAPTURE (Identification & Valuation) ---
                     // This content is guaranteed to be short enough to fit one page.
                     pageOneCapture.innerHTML = `
                         <div style="padding: 10px 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 15px; text-align: center;">
@@ -505,12 +497,10 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                             </div>
                             <p style="margin-top: 5px; font-size: 9px; color: #6b7280;">*Valuation methodology and source details are included on the final page of the downloadable PDF report.</p>
                         </div>
-                        
-                        <!-- CONDITION and DISCLAIMER are MOVED OUT of this image capture block -->
                     `;
                     
-                    // --- NEW: CONTENT FOR PAGES 2 and 3 (TEXT FLOW) ---
-                    // This is only used for jspdf's reliable text rendering.
+                    // --- NEW: CONTENT FOR PAGES 2 (TEXT FLOW) ---
+                    // This content is split into manageable sections for jspdf's native text handling.
                     printViewContent.innerHTML = `
                         <div>
                             <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">Condition</h3>
@@ -563,20 +553,20 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             setTimeout(async () => {
                 const { jsPDF } = window.jspdf;
                 
-                // --- SETUP ---
+                // --- SETUP FOR PAGE 1 CAPTURE ---
+                // We use a temporary container to capture Page 1 content for stability
                 const tempContainer = document.createElement('div');
                 tempContainer.style.position = 'absolute';
                 tempContainer.style.left = '-9999px';
                 tempContainer.style.top = '-9999px';
-                tempContainer.style.width = '800px'; 
+                tempContainer.style.width = pageOneCapture.style.width; // Use 800px width from CSS
                 tempContainer.style.backgroundColor = 'white';
                 tempContainer.style.padding = '30px';
                 tempContainer.style.boxSizing = 'border-box';
                 tempContainer.style.fontFamily = 'Inter, sans-serif';
                 
-                // Content for Page 1 is in pageOneCapture
-                const pageOneContent = document.getElementById('page-one-capture');
-                tempContainer.innerHTML = pageOneContent.innerHTML;
+                // Copy the short, structured content (Page 1) into the temporary container
+                tempContainer.innerHTML = pageOneCapture.innerHTML;
                 document.body.appendChild(tempContainer);
                 
                 const addFooter = (doc, margin, pageHeight) => {
@@ -593,7 +583,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const pageHeight = doc.internal.pageSize.getHeight();
                     const margin = 10;
                     
-                    // --- 1. CAPTURE PAGE 1 CONTENT (IMAGE) ---
+                    // 1. CAPTURE PAGE 1 CONTENT (IMAGE)
                     const reportCanvas = await html2canvas(tempContainer, { 
                         scale: 2, 
                         width: tempContainer.offsetWidth,
@@ -609,7 +599,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const reportPdfHeight = reportPdfWidth / reportRatio;
                     let currentYPos = margin;
                     
-                    // Add image to PDF. Since pageOneCapture is short, it fits cleanly.
+                    // Add image to PDF. (Guaranteed to fit Page 1)
                     doc.addImage(
                         reportImgData, 
                         'JPEG', 
@@ -624,10 +614,8 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     doc.addPage();
                     currentYPos = margin;
                     
-                    // Add content using native text splitting for flow control
+                    // Get content for Page 2
                     const pageTwoContent = document.getElementById('print-view-content');
-                    const conditionElement = pageTwoContent.children[0]; // Condition
-                    const disclaimerElement = pageTwoContent.children[1]; // Disclaimer
                     
                     // A. Print Condition Notes
                     doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
@@ -646,7 +634,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     doc.setFontSize(9); doc.setTextColor(50);
                     const disclaimerTextLines = doc.splitTextToSize(reportData.disclaimer, pageWidth - margin * 2);
 
-                    // Check if disclaimer fits on Page 2
+                    // Check if disclaimer fits on the current page
                     if (currentYPos + disclaimerTextLines.length * 4.5 > pageHeight - margin - 10) {
                         doc.addPage();
                         currentYPos = margin;
