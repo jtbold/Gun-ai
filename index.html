@@ -478,7 +478,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                 
                 // 1. Convert the Report Content HTML to a Canvas Image
                 const reportCanvas = await html2canvas(reportElement, { 
-                    scale: 3,
+                    scale: 4, // Increased scale for larger text
                     width: reportElement.offsetWidth 
                 }); 
                 const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
@@ -487,6 +487,8 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                 const reportWidth = reportCanvas.width;
                 const reportHeight = reportCanvas.height;
                 const reportRatio = reportWidth / reportHeight;
+                
+                // Calculate PDF dimensions using a target width, which makes the content larger
                 const reportPdfWidth = pageWidth - margin * 2;
                 const reportPdfHeight = reportPdfWidth / reportRatio;
                 let currentYPos = margin;
@@ -521,37 +523,37 @@ The following online sources were referenced by the LLM in real-time to generate
                 currentYPos += 10;
                 
                 // Print Methodology Text
-                doc.setFontSize(10);
+                doc.setFontSize(11); // Increased font size for methodology text (Page 2)
                 doc.setTextColor(50);
                 doc.setFont("helvetica", "normal");
                 const reportPdfWidthMethodology = pageWidth - margin * 2;
                 let textLines = doc.splitTextToSize(methodologyText, reportPdfWidthMethodology);
                 doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * 4.5;
+                currentYPos += textLines.length * 5; // Increased line height to match larger font
                 
                 // Print Sources
-                doc.setFontSize(10);
+                doc.setFontSize(11); // Increased font size for sources
                 doc.setTextColor(50);
                 doc.setFont("helvetica", "bold");
                 doc.text("Referenced Sources:", margin, currentYPos);
-                currentYPos += 5;
+                currentYPos += 6; // Increased spacing
                 doc.setFont("helvetica", "normal");
-                doc.setFontSize(9);
+                doc.setFontSize(10);
                 
                 sourceList.forEach((source, index) => {
                     const sourceText = `${index + 1}. ${source.title} (${source.uri})`;
                     let sourceLines = doc.splitTextToSize(sourceText, reportPdfWidthMethodology);
                     
-                    if (currentYPos + sourceLines.length * 4.5 > pageHeight - margin - 10) {
+                    if (currentYPos + sourceLines.length * 5.5 > pageHeight - margin - 10) {
                         doc.addPage();
                         currentYPos = margin;
-                        doc.setFontSize(10);
+                        doc.setFontSize(11);
                         doc.text("Sources (Cont.):", margin, currentYPos);
-                        currentYPos += 5;
+                        currentYPos += 6;
                         addFooter(doc, margin, pageHeight); 
                     }
                     doc.text(sourceLines, margin, currentYPos);
-                    currentYPos += sourceLines.length * 4.5;
+                    currentYPos += sourceLines.length * 5.5; // Increased line height
                 });
                 
                 addFooter(doc, margin, pageHeight);
