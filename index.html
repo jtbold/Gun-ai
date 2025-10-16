@@ -433,7 +433,11 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             showMessage("Preparing PDF for download...", 'info');
             downloadButton.disabled = true;
 
-            // FIX: Add a short delay to ensure DOM is fully rendered before canvas capture
+            // FIX 1: Temporarily hide image previews to prevent any potential CORS tainting during capture
+            const originalDisplay = imagePreviewsContainer.style.display;
+            imagePreviewsContainer.style.display = 'none'; 
+
+            // FIX 2: Add a short delay to ensure DOM is fully rendered before canvas capture
             setTimeout(async () => {
                 const { jsPDF } = window.jspdf;
                 const reportElement = document.getElementById('report-container');
@@ -453,9 +457,9 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     
                     // 1. Add Report Content (Page 1)
                     const reportCanvas = await html2canvas(reportElement, { 
-                        scale: 3, 
+                        // FIX 3: Reduced scale from 3 to 2 for better memory performance
+                        scale: 2, 
                         width: reportElement.offsetWidth,
-                        // FIX: Added useCORS for stability with external images (if any)
                         useCORS: true 
                     }); 
                     const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
@@ -516,6 +520,8 @@ The following online sources were referenced by the LLM in real-time to generate
                     console.error("PDF generation failed:", error);
                     showMessage("Failed to generate PDF. Please try again.", 'error');
                 } finally {
+                    // FIX 1: Restore the image previews display
+                    imagePreviewsContainer.style.display = originalDisplay;
                     downloadButton.disabled = false;
                 }
             }, 100); // 100ms delay to ensure the report DOM is fully rendered
