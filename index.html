@@ -26,30 +26,9 @@
         .file-input-wrapper { position: relative; display: inline-block; }
         .file-input-wrapper input[type="file"] { position: absolute; top: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 
-        /* Styles for the off-screen print container (ensures it has rendered dimensions) */
-        #print-view-content { 
-            position: absolute; 
-            top: -9999px; 
-            left: -9999px; 
-            width: 800px; /* Explicit width for consistent capture */
-            background-color: white;
-            padding: 30px;
-            font-family: 'Inter', sans-serif;
-            box-sizing: border-box;
-            visibility: hidden; /* Hide content from screen without display:none */
-        }
-        
-        /* Styles for the short content we want captured as an image (Page 1) */
-        #page-one-capture {
-            width: 800px;
-            padding: 30px;
-            margin: 0;
-            background-color: white;
-            box-sizing: border-box;
-            visibility: hidden; /* Hide from view until capture */
-            position: absolute; 
-            top: -9999px; 
-            left: -9999px;
+        /* Off-screen elements are hidden */
+        #print-view-content, #page-one-capture {
+            display: none;
         }
     </style>
 </head>
@@ -501,12 +480,13 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     
                     // --- NEW: CONTENT FOR PAGES 2 (TEXT FLOW) ---
                     // This content is split into manageable sections for jspdf's native text handling.
+                    // This is used for Page 2 and Page 3 content via text flow.
                     printViewContent.innerHTML = `
-                        <div>
+                        <div id="condition-block">
                             <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">Condition</h3>
                             <p style="color: #4b5563; font-size: 10pt;">${report.conditionNotes}</p>
                         </div>
-                        <div style="margin-top: 20pt;">
+                        <div id="disclaimer-block" style="margin-top: 20pt;">
                             <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151; margin-bottom: 0.5rem;">Disclaimer</h3>
                             <div style="padding: 1rem; background-color: #fffbeb; font-size: 10pt; color: #92400e; border-radius: 8px;">
                                 <p style="font-weight: bold;">${report.disclaimer}</p>
@@ -614,38 +594,76 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     doc.addPage();
                     currentYPos = margin;
                     
-                    // Get content for Page 2
-                    const pageTwoContent = document.getElementById('print-view-content');
-                    
                     // A. Print Condition Notes
                     doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
                     doc.text("Condition", margin, currentYPos);
                     currentYPos += 6; 
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
                     const conditionTextLines = doc.splitTextToSize(reportData.conditionNotes, pageWidth - margin * 2);
-                    doc.text(conditionTextLines, margin, currentYPos);
-                    currentYPos += conditionTextLines.length * 4.5;
+                    
+                    // Use flow control for Condition
+                    let conditionLinesPrinted = 0;
+                    const linesPerScreen = Math.floor((pageHeight - currentYPos - margin * 2) / 4.5); // Approx lines that fit
+                    
+                    while (conditionLinesPrinted < conditionTextLines.length) {
+                        if (currentYPos >= pageHeight - margin - 10) {
+                            doc.addPage();
+                            currentYPos = margin;
+                            doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
+                            doc.text("Condition (Cont.)", margin, currentYPos);
+                            currentYPos += 6; 
+                            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+                        }
+                        
+                        // Determine how many lines to print on this segment
+                        const remainingLines = conditionTextLines.length - conditionLinesPrinted;
+                        const linesToPrint = Math.min(remainingLines, Math.floor((pageHeight - currentYPos - margin * 2) / 4.5));
+                        
+                        const linesSlice = conditionTextLines.slice(conditionLinesPrinted, conditionLinesPrinted + linesToPrint);
+                        doc.text(linesSlice, margin, currentYPos);
+                        
+                        currentYPos += linesSlice.length * 4.5;
+                        conditionLinesPrinted += linesToPrint;
+                    }
+                    
                     
                     // B. Print Disclaimer
                     currentYPos += 10;
+                    
+                    // If the disclaimer header doesn't fit, start a new page
+                    if (currentYPos >= pageHeight - margin - 10) {
+                        doc.addPage();
+                        currentYPos = margin;
+                    }
+                    
                     doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
                     doc.text("Disclaimer", margin, currentYPos);
                     currentYPos += 6; 
                     doc.setFontSize(9); doc.setTextColor(50);
                     const disclaimerTextLines = doc.splitTextToSize(reportData.disclaimer, pageWidth - margin * 2);
-
-                    // Check if disclaimer fits on the current page
-                    if (currentYPos + disclaimerTextLines.length * 4.5 > pageHeight - margin - 10) {
-                        doc.addPage();
-                        currentYPos = margin;
-                        addFooter(doc, margin, pageHeight); 
+                    
+                    // Use flow control for Disclaimer
+                    let disclaimerLinesPrinted = 0;
+                    while (disclaimerLinesPrinted < disclaimerTextLines.length) {
+                        if (currentYPos >= pageHeight - margin - 10) {
+                            doc.addPage();
+                            currentYPos = margin;
+                            doc.setFontSize(9); doc.setTextColor(50);
+                        }
+                        
+                        const linesToPrint = Math.min(disclaimerTextLines.length - disclaimerLinesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / 4.5));
+                        
+                        const linesSlice = disclaimerTextLines.slice(disclaimerLinesPrinted, disclaimerLinesPrinted + linesToPrint);
+                        doc.text(linesSlice, margin, currentYPos);
+                        
+                        currentYPos += linesSlice.length * 4.5;
+                        disclaimerLinesPrinted += linesToPrint;
                     }
-                    doc.text(disclaimerTextLines, margin, currentYPos);
-                    currentYPos += disclaimerTextLines.length * 4.5;
-
+                    
+                    // Add footer to the last page that received content
                     addFooter(doc, margin, pageHeight);
                     
-                    // --- 3. ADD PAGE 3 CONTENT (TEXT: Methodology and Sources) ---
+                    // --- 3. ADD METHODOLOGY AND SOURCES (Page 3 or later) ---
                     const methodologyTitle = "Valuation Methodology and Sources";
                     const methodologyText = `
 The final retail valuation is determined using a two-step process:
