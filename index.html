@@ -1,4 +1,4 @@
-<html lang="en">
+html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,6 +25,20 @@
         /* CRITICAL MOBILE FIX: Wrapper for file input to overlay the button */
         .file-input-wrapper { position: relative; display: inline-block; }
         .file-input-wrapper input[type="file"] { position: absolute; top: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+        /* FIX: Move the element far off-screen, but do NOT use display: none here */
+        #print-view-content { 
+            position: absolute; 
+            top: -9999px; 
+            left: -9999px; 
+            width: 800px; /* Match max-width for consistent capture */
+            background-color: white;
+            padding: 30px;
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+            /* Ensure it is initially hidden from the capture logic until activated by JS */
+            visibility: hidden; 
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
@@ -79,6 +93,8 @@
             </button>
             <div id="status-message" class="text-sm text-center text-gray-600"></div>
         </div>
+
+        <div id="print-view-content"></div>
         
         <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display: none;">
             <div id="report-header">
@@ -156,6 +172,9 @@
         const statusMessage = document.getElementById('status-message');
         const reportContainer = document.getElementById('report-container');
         const reportContent = document.getElementById('report-content');
+        // NEW: Print content element
+        const printViewContent = document.getElementById('print-view-content'); 
+
         let selectedFiles = [];
         const MAX_FILES = 6;
         const MAX_FILE_SIZE_MB = 4;
@@ -309,7 +328,7 @@
                     
                     // Minimized Prompt for clarity and security
                     const reportPrompt = `
-You are a firearms appraiser specializing in dealer trade-in valuations. Identify the firearm and create a concise, professional report. Return ONLY valid JSON: { "modelGuess": "string", "identification": "string", "productionEra": "string", "features": "string", "history": "string", "conditionNotes": "string", "disclaimer": "string", "valuation": { "wholesaleValueEstimateUSD": "string", "valuationConfidence": "string" } }. Provide a SINGLE numerical wholesale/dealer acquisition value in USD (no symbols, no range). You must specifically look for trade-in price data, NOT high collector retail prices. Base value on condition seen in photos/notes.
+You are a firearms appraiser specializing in dealer trade-in valuations. Identify the firearm and create a concise, professional report. Return ONLY valid JSON: { "modelGuess": "string", "identification": "string", "productionEra": "string", "features": "string", "history": "string", "conditionNotes": "string", "disclaimer": "string", "valuation": { "wholesaleValueEstimateUSD": "string", "valuationConfidence": "string" } }. Provide a SINGLE numerical wholesale/dealer acquisition value in USD (no symbols, no range). You must specifically look for trade-in price data, NOT high collector retail prices. Base value on condition seen in photos/notes. **DO NOT include any images, HTML tags, or image URLs in the final JSON output fields.**
 `;
                     
                     const payload = {
@@ -341,19 +360,15 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     let jsonText = result.candidates[0].content.parts[0].text.trim(); // Trim whitespace
                     
                     // --- FIX: ULTRA-AGGRESSIVE JSON EXTRACTION ---
-                    // 1. Attempt to find the markdown block
                     const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
                     if (jsonMatch) {
                         jsonText = jsonMatch[1].trim();
                     } else {
-                        // 2. If no markdown block found, aggressively strip surrounding text 
-                        //    by finding the first '{' and the last '}'
                         const start = jsonText.indexOf('{');
                         const end = jsonText.lastIndexOf('}');
                         if (start !== -1 && end !== -1 && end > start) {
                             jsonText = jsonText.substring(start, end + 1).trim();
                         } else {
-                             // Fallback: If structured delimiters aren't found, try stripping simple backticks
                             jsonText = jsonText.replace(/^```|```$/g, '').trim(); 
                         }
                     }
@@ -362,7 +377,6 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     try {
                         report = JSON.parse(jsonText);
                     } catch (e) {
-                        // Provide a specific error for JSON parsing failure
                         console.error("JSON Parsing Error. Raw response text:", jsonText);
                         throw new Error(`Could not parse JSON response from API. Response text: ${jsonText.substring(0, 50)}...`);
                     }
@@ -394,8 +408,8 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     }
                     // --- END PRICING LOGIC ---
                     
-                    // --- Display Report ---
-                    reportContent.innerHTML = `
+                    // --- Display Report (For User View) ---
+                    const reportHtml = `
                         <div class="p-4 bg-gray-50 rounded-lg"><p class="font-bold">Model:</p><p>${report.modelGuess}</p></div>
                         <div><h3 class="font-semibold text-lg text-gray-800">Identification</h3><p class="text-gray-700">${report.identification}</p></div>
                         <div><h3 class="font-semibold text-lg text-gray-800">Production Era</h3><p class="text-gray-700">${report.productionEra}</p></div>
@@ -424,6 +438,52 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                         
                         <div><h3 class="font-semibold text-lg text-gray-800">Condition</h3><p class="text-gray-700">${report.conditionNotes}</p></div>
                         <div class="p-4 mt-4 bg-yellow-50 text-sm text-yellow-800 rounded-lg"><p><strong>Disclaimer:</strong> ${report.disclaimer}</p></div>
+                    `;
+                    reportContent.innerHTML = reportHtml;
+
+                    // --- NEW: Simplified content for Print View (Crucial for PDF stability) ---
+                    printViewContent.innerHTML = `
+                        <div style="padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1rem; text-align: center;">
+                            <h3 style="font-size: 1.25rem; font-weight: bold; color: #d97706; margin: 0 auto 0.5rem;">Dealer Logo</h3>
+                            <h2 style="font-size: 1.5rem; font-weight: bold; color: #1f2937;">Firearm Identification Report</h2>
+                        </div>
+                        <div style="margin-bottom: 1rem; padding: 10px; background-color: #f9fafb; border-radius: 8px;">
+                            <p style="font-weight: bold; margin-bottom: 5px;">Model:</p><p>${report.modelGuess}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Identification</h3><p style="color: #4b5563;">${report.identification}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Production Era</h3><p style="color: #4b5563;">${report.productionEra}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Features</h3><p style="color: #4b5563;">${report.features}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">History</h3><p style="color: #4b5563;">${report.history}</p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Valuation</h3>
+                            <div style="margin-top: 8px; padding: 1rem; border: 1px solid #d1fae5; border-radius: 12px; background-color: #ecfdf5;">
+                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; padding-bottom: 8px;">
+                                    <span style="color: #1e40af;">Dealer Purchase Offer:</span>
+                                    <span style="color: #1e40af; font-weight: bold;">$${report.valuation.dealerPurchasePriceUSD}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; border-top: 1px solid #d1fae5; padding-top: 8px;">
+                                    <span>Projected Retail Value:</span>
+                                    <span style="color: #065f46; font-weight: bold;">$${report.valuation.projectedRetailPriceUSD}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.875rem; color: #4b5563;">
+                                <strong style="color: #1f2937;">Confidence Level:</strong> 
+                                <span style="font-weight: 600; color: #374151;">${report.valuation.valuationConfidence}</span>
+                                <p style="font-size: 0.75rem; margin-top: 4px;">This reflects the estimated certainty based on image clarity and market data availability.</p>
+                            </div>
+                            <p style="margin-top: 8px; font-size: 0.75rem; color: #6b7280;">*Valuation methodology and source details are included on the final page of the downloadable PDF report.</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;"><h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Condition</h3><p style="color: #4b5563;">${report.conditionNotes}</p></div>
+                        <div style="padding: 1rem; margin-top: 1rem; background-color: #fffbeb; font-size: 0.875rem; color: #92400e; border-radius: 8px;"><p style="font-weight: bold;">Disclaimer:</strong> ${report.disclaimer}</p></div>
                     `;
                     
                     reportContainer.style.display = 'block';
@@ -463,8 +523,15 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             // FIX 2: Add a short delay to ensure DOM is fully rendered before canvas capture
             setTimeout(async () => {
                 const { jsPDF } = window.jspdf;
-                const reportElement = document.getElementById('report-container');
                 
+                // CRITICAL FIX: Target the new, simplified print content element
+                const reportElementToCapture = document.getElementById('print-view-content');
+                
+                // FIX 5: Temporarily make the off-screen element visible in the layout flow
+                reportElementToCapture.style.position = 'static'; 
+                reportElementToCapture.style.visibility = 'visible'; 
+                reportElementToCapture.style.display = 'block';
+
                 const addFooter = (doc, margin, pageHeight) => {
                     doc.setFontSize(8); doc.setTextColor(150); doc.setFont("helvetica", "normal");
                     doc.text("WWW.Ludditelearning.com", margin, pageHeight - 5);
@@ -479,11 +546,15 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const margin = 10;
                     
                     // 1. Add Report Content (Page 1)
-                    const reportCanvas = await html2canvas(reportElement, { 
+                    const reportCanvas = await html2canvas(reportElementToCapture, { 
                         // FIX 3: Reduced scale from 3 to 2 for better memory performance
                         scale: 2, 
-                        width: reportElement.offsetWidth,
-                        useCORS: true 
+                        width: reportElementToCapture.offsetWidth,
+                        useCORS: true,
+                        allowTaint: true,
+                        ignoreElements: (element) => {
+                            return element.id === 'download-button' || element.id === 'generate-button';
+                        }
                     }); 
                     const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
                     const reportRatio = reportCanvas.width / reportCanvas.height;
@@ -543,7 +614,12 @@ The following online sources were referenced by the LLM in real-time to generate
                     console.error("PDF generation failed:", error);
                     showMessage("Failed to generate PDF. Please try again.", 'error');
                 } finally {
-                    // FIX 1: Restore the image previews display
+                    // FIX 5: Restore the off-screen state
+                    reportElementToCapture.style.position = 'absolute'; 
+                    reportElementToCapture.style.visibility = 'hidden'; 
+                    reportElementToCapture.style.display = 'none';
+
+                    // Restore the image previews display
                     imagePreviewsContainer.style.display = originalDisplay;
                     downloadButton.disabled = false;
                 }
