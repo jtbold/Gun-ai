@@ -1,24 +1,20 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // 1. Secure API Key Injection (Reads __API_KEY__ set in Render and exposes it)
+  // This section securely injects your API key's value into the final JavaScript bundle
   define: {
-    // This tells Vite to securely read the key from the environment variable 
-    // you set in the Render dashboard and make it available to your JS.
+    // Reads the environment variable '__API_KEY__' set in Render and exposes it as 'VITE_API_KEY'
     'import.meta.env.VITE_API_KEY': JSON.stringify(process.env.__API_KEY__),
   },
   
-  // 2. Output and Build Configuration
+  // These settings ensure the build outputs to the correct 'dist' folder
   build: {
-    // This MUST match the Publish Directory setting in Render
     outDir: 'dist', 
     rollupOptions: {
       input: 'index.html', 
     },
   },
   
-  // 3. Display Fix
-  // 'custom' prevents Vite from breaking the HTML structure, ensuring the 
-  // <meta charset="UTF-8"> tag loads immediately to fix the garbled characters.
+  // This is the essential fix for the garbled symbols (character encoding)
   appType: 'custom', 
 });
