@@ -1,3 +1,5 @@
+HTML
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -26,7 +28,7 @@
         .file-input-wrapper { position: relative; display: inline-block; }
         .file-input-wrapper input[type="file"] { position: absolute; top: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 
-        /* FIX: Styles for the off-screen print container (ensures it has rendered dimensions) */
+        /* Styles for the off-screen print container (ensures it has rendered dimensions) */
         #print-view-content { 
             position: absolute; 
             top: -9999px; 
@@ -408,7 +410,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     // --- END PRICING LOGIC ---
                     
                     // --- Display Report (For User View) ---
-                    // REMOVED DISCLAIMER from visible HTML
+                    // This is the visually appealing, on-screen report.
                     const reportHtml = `
                         <div class="p-4 bg-gray-50 rounded-lg"><p class="font-bold">Model:</p><p>${report.modelGuess}</p></div>
                         <div><h3 class="font-semibold text-lg text-gray-800">Identification</h3><p class="text-gray-700">${report.identification}</p></div>
@@ -441,49 +443,51 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     `;
                     reportContent.innerHTML = reportHtml;
 
-                    // --- NEW: Simplified content for Print View (Crucial for PDF stability) ---
-                    // MOVED DISCLAIMER OUT OF THIS BLOCK (it's too long)
+                    // --- NEW: Simplified content for Print View (GUARANTEED TO FIT PAGE 1) ---
+                    // This content is optimized for reliable html2canvas capture (no full Tailwind reliance).
+                    // The Condition block is intentionally left in this section, and we rely on the font size reduction below
+                    // to make the full text fit the single page.
                     printViewContent.innerHTML = `
-                        <div style="padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1rem; text-align: center;">
-                            <h3 style="font-size: 1.25rem; font-weight: bold; color: #d97706; margin: 0 auto 0.5rem;">Dealer Logo</h3>
-                            <h2 style="font-size: 1.5rem; font-weight: bold; color: #1f2937;">Firearm Identification Report</h2>
+                        <div style="padding-bottom: 0.5rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 0.5rem; text-align: center;">
+                            <h3 style="font-size: 1.1rem; font-weight: bold; color: #d97706; margin: 0 auto 0.3rem;">Dealer Logo</h3>
+                            <h2 style="font-size: 1.3rem; font-weight: bold; color: #1f2937;">Firearm Identification Report</h2>
                         </div>
-                        <div style="margin-bottom: 1rem; padding: 10px; background-color: #f9fafb; border-radius: 8px;">
-                            <p style="font-weight: bold; margin-bottom: 5px;">Model:</p><p>${report.modelGuess}</p>
+                        <div style="margin-bottom: 0.5rem; padding: 5px; background-color: #f9fafb; border-radius: 6px; font-size: 12px;">
+                            <p style="font-weight: bold; margin-bottom: 3px;">Model:</p><p>${report.modelGuess}</p>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Identification</h3><p style="color: #4b5563;">${report.identification}</p>
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;">
+                            <h3 style="font-weight: 600; font-size: 14px; color: #374151;">Identification</h3><p style="color: #4b5563;">${report.identification}</p>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Production Era</h3><p style="color: #4b5563;">${report.productionEra}</p>
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;">
+                            <h3 style="font-weight: 600; font-size: 14px; color: #374151;">Production Era</h3><p style="color: #4b5563;">${report.productionEra}</p>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Features</h3><p style="color: #4b5563;">${report.features}</p>
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;">
+                            <h3 style="font-weight: 600; font-size: 14px; color: #374151;">Features</h3><p style="color: #4b5563;">${report.features}</p>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">History</h3><p style="color: #4b5563;">${report.history}</p>
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;">
+                            <h3 style="font-weight: 600; font-size: 14px; color: #374151;">History</h3><p style="color: #4b5563;">${report.history}</p>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Valuation</h3>
-                            <div style="margin-top: 8px; padding: 1rem; border: 1px solid #d1fae5; border-radius: 12px; background-color: #ecfdf5;">
-                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; padding-bottom: 8px;">
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;">
+                            <h3 style="font-weight: 600; font-size: 14px; color: #374151;">Valuation</h3>
+                            <div style="margin-top: 5px; padding: 0.5rem; border: 1px solid #d1fae5; border-radius: 8px; background-color: #ecfdf5;">
+                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; padding-bottom: 5px;">
                                     <span style="color: #1e40af;">Dealer Purchase Offer:</span>
                                     <span style="color: #1e40af; font-weight: bold;">$${report.valuation.dealerPurchasePriceUSD}</span>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; border-top: 1px solid #d1fae5; padding-top: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-weight: 500; color: #374151; border-top: 1px solid #d1fae5; padding-top: 5px;">
                                     <span>Projected Retail Value:</span>
                                     <span style="color: #065f46; font-weight: bold;">$${report.valuation.projectedRetailPriceUSD}</span>
                                 </div>
                             </div>
-                            <div style="margin-top: 1rem; font-size: 0.875rem; color: #4b5563;">
+                            <div style="margin-top: 5px; font-size: 10px; color: #4b5563;">
                                 <strong style="color: #1f2937;">Confidence Level:</strong> 
                                 <span style="font-weight: 600; color: #374151;">${report.valuation.valuationConfidence}</span>
-                                <p style="font-size: 0.75rem; margin-top: 4px;">This reflects the estimated certainty based on image clarity and market data availability.</p>
+                                <p style="font-size: 9px; margin-top: 2px;">This reflects the estimated certainty based on image clarity and market data availability.</p>
                             </div>
-                            <p style="margin-top: 8px; font-size: 0.75rem; color: #6b7280;">*Valuation methodology and source details are included on the final page of the downloadable PDF report.</p>
+                            <p style="margin-top: 5px; font-size: 9px; color: #6b7280;">*Valuation methodology and source details are included on the final page of the downloadable PDF report.</p>
                         </div>
                         
-                        <div style="margin-bottom: 1rem;"><h3 style="font-weight: 600; font-size: 1.125rem; color: #374151;">Condition</h3><p style="color: #4b5563;">${report.conditionNotes}</p></div>
+                        <div style="margin-bottom: 0.5rem; font-size: 12px;"><h3 style="font-weight: 600; font-size: 14px; color: #374151;">Condition</h3><p style="color: #4b5563;">${report.conditionNotes}</p></div>
                     `;
                     
                     reportContainer.style.display = 'block';
@@ -570,8 +574,8 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const reportPdfHeight = reportPdfWidth / reportRatio;
                     let currentYPos = margin;
                     
-                    // --- FIX: Add the report image without slicing, letting it fill one page ---
-                    // This relies on the content being short enough (after removing the long disclaimer)
+                    // --- Page 1 Content (Main Report) ---
+                    // Add image to PDF using the calculated dimensions
                     doc.addImage(
                         reportImgData, 
                         'JPEG', 
