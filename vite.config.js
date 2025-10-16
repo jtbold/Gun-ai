@@ -1,23 +1,24 @@
-/ vite.config.js content:
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // 1. Force environment variable injection (fixes API key missing error)
+  // 1. Secure API Key Injection (Reads __API_KEY__ set in Render and exposes it)
   define: {
-    // This securely injects the value of the RENDER environment variable '__API_KEY__'
-    // into the front-end code as 'import.meta.env.VITE_API_KEY'.
+    // This tells Vite to securely read the key from the environment variable 
+    // you set in the Render dashboard and make it available to your JS.
     'import.meta.env.VITE_API_KEY': JSON.stringify(process.env.__API_KEY__),
   },
   
-  // 2. Output and Build Configuration (fixes Publish Directory error)
+  // 2. Output and Build Configuration
   build: {
-    outDir: 'dist', // Ensures output goes to the 'dist' folder
-    // This is necessary because it tells Vite to process your single HTML file
+    // This MUST match the Publish Directory setting in Render
+    outDir: 'dist', 
     rollupOptions: {
-      input: 'index.html',
+      input: 'index.html', 
     },
   },
   
-  // 3. Prevent automatic HTML processing (fixes garbled characters)
+  // 3. Display Fix
+  // 'custom' prevents Vite from breaking the HTML structure, ensuring the 
+  // <meta charset="UTF-8"> tag loads immediately to fix the garbled characters.
   appType: 'custom', 
 });
