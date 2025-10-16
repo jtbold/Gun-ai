@@ -338,12 +338,25 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     }
                     
                     const result = await response.json();
-                    let jsonText = result.candidates[0].content.parts[0].text;
+                    let jsonText = result.candidates[0].content.parts[0].text.trim(); // Trim whitespace
                     
-                    // Robust JSON parsing 
-                    const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/);
-                    if (jsonMatch) jsonText = jsonMatch[1].trim();
-                    let report = JSON.parse(jsonText);
+                    // FIX: Robust JSON extraction logic to handle various markdown formats
+                    const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+                    if (jsonMatch) {
+                        jsonText = jsonMatch[1].trim();
+                    } else {
+                        // If no markdown block found, strip leading/trailing ticks and ensure clean string
+                        jsonText = jsonText.replace(/^```|```$/g, '').trim(); 
+                    }
+                    
+                    let report;
+                    try {
+                        report = JSON.parse(jsonText);
+                    } catch (e) {
+                        // Provide a specific error for JSON parsing failure
+                        console.error("JSON Parsing Error. Raw response text:", jsonText);
+                        throw new Error(`Could not parse JSON response from API. Response text: ${jsonText.substring(0, 50)}...`);
+                    }
                     
                     // Source extraction
                     report.sources = result.candidates[0].groundingMetadata?.groundingAttributions?.map(a => ({ uri: a.web?.uri, title: a.web?.title }))?.filter(s => s.uri && s.title) || [];
