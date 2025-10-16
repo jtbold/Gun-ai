@@ -436,7 +436,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     reportContent.innerHTML = reportHtml;
 
                     // --- NEW: Data for Pure Text PDF Generation ---
-                    // This stores all necessary data strings for PDF generation (replaces pageOneCapture/printViewContent logic)
+                    // This stores all necessary data strings for PDF generation
                     window.pdfData = {
                         modelGuess: report.modelGuess,
                         identification: report.identification,
@@ -501,14 +501,43 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     doc.text("WWW.Ludditelearning.com", margin, pageHeight - 5);
                 };
 
-                const addHeader = (title) => {
-                    doc.setFontSize(16); doc.setTextColor(0); doc.setFont("helvetica", "bold");
-                    doc.text(title, pageWidth / 2, currentYPos, { align: 'center' });
-                    currentYPos += 1; // Spacing adjustment
-                    doc.line(margin, currentYPos, pageWidth - margin, currentYPos);
-                    currentYPos += 7; // Spacing after header line
+                // Helper function to print a section title
+                const printSectionTitle = (title) => {
+                    if (currentYPos + 10 >= pageHeight - margin) {
+                        doc.addPage();
+                        currentYPos = margin;
+                        addFooter();
+                    }
+                    doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
+                    doc.text(title, margin, currentYPos);
+                    currentYPos += 6; 
                 };
-                
+
+                // Helper function to print multi-line text
+                const printMultiLineText = (text, size, color) => {
+                    doc.setFontSize(size); doc.setTextColor(color); doc.setFont("helvetica", "normal");
+                    const textLines = doc.splitTextToSize(text, columnWidth);
+                    
+                    let linesPrinted = 0;
+                    while (linesPrinted < textLines.length) {
+                        if (currentYPos >= pageHeight - margin - 10) {
+                            doc.addPage();
+                            currentYPos = margin;
+                            addFooter();
+                            doc.setFontSize(size); doc.setTextColor(color); doc.setFont("helvetica", "normal");
+                        }
+                        
+                        const linesToPrint = Math.min(textLines.length - linesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / lineHeight));
+                        const linesSlice = textLines.slice(linesPrinted, linesPrinted + linesToPrint);
+                        
+                        doc.text(linesSlice, margin, currentYPos);
+                        currentYPos += linesSlice.length * lineHeight;
+                        linesPrinted += linesToPrint;
+                    }
+                    currentYPos += 4; // Add small vertical break
+                };
+
+
                 // --- Page 1: Identification & Valuation Summary ---
                 
                 // Title Block
@@ -529,45 +558,23 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                 currentYPos += 8;
 
                 // Identification
-                doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                doc.text("Identification", margin, currentYPos);
-                currentYPos += 5;
-                doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                let textLines = doc.splitTextToSize(data.identification, columnWidth);
-                doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * lineHeight + 5;
+                printSectionTitle("Identification");
+                printMultiLineText(data.identification, normalFontSize, 0);
 
                 // Production Era
-                doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                doc.text("Production Era", margin, currentYPos);
-                currentYPos += 5;
-                doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                textLines = doc.splitTextToSize(data.productionEra, columnWidth);
-                doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * lineHeight + 5;
+                printSectionTitle("Production Era");
+                printMultiLineText(data.productionEra, normalFontSize, 0);
 
                 // Features
-                doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                doc.text("Features", margin, currentYPos);
-                currentYPos += 5;
-                doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                textLines = doc.splitTextToSize(data.features, columnWidth);
-                doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * lineHeight + 5;
+                printSectionTitle("Features");
+                printMultiLineText(data.features, normalFontSize, 0);
 
                 // History
-                doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                doc.text("History", margin, currentYPos);
-                currentYPos += 5;
-                doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                textLines = doc.splitTextToSize(data.history, columnWidth);
-                doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * lineHeight + 8;
-                
+                printSectionTitle("History");
+                printMultiLineText(data.history, normalFontSize, 0);
+
                 // Valuation Box (Simple Text Layout)
-                doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                doc.text("Valuation", margin, currentYPos);
-                currentYPos += 5;
+                printSectionTitle("Valuation");
                 
                 doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
                 doc.rect(margin, currentYPos, columnWidth, 20); // Draw box for valuation
@@ -591,9 +598,13 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                 // Confidence
                 doc.setFontSize(smallFontSize); doc.setTextColor(0); doc.setFont("helvetica", "bold");
                 doc.text("Confidence Level:", margin, currentYPos);
+                
+                // FIX: Use multi-line printing for the full confidence text
+                const confidenceText = `${data.valuationConfidence}. This reflects the estimated certainty based on image clarity and market data availability.`;
+                let confidenceLines = doc.splitTextToSize(confidenceText, columnWidth - 30); // Use a slightly smaller column
                 doc.setFont("helvetica", "normal");
-                doc.text(data.valuationConfidence, margin + 30, currentYPos);
-                currentYPos += 4;
+                doc.text(confidenceLines, margin + 30, currentYPos);
+                currentYPos += confidenceLines.length * lineHeight;
                 
                 doc.setFontSize(smallFontSize - 1); doc.setTextColor(100);
                 doc.text("*Valuation methodology and source details are included on the final page of the downloadable PDF report.", margin, currentYPos);
@@ -603,82 +614,31 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                 addFooter();
 
                 
-                // --- Page 2: Condition and Disclaimer ---
+                // --- Page 2: Condition, Disclaimer, Methodology, and Sources ---
                 doc.addPage();
                 currentYPos = margin;
                 
                 // Condition
-                doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
-                doc.text("Condition", margin, currentYPos);
-                currentYPos += 6; 
-                doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                textLines = doc.splitTextToSize(data.conditionNotes, columnWidth);
-                
-                // Auto-split text for Condition Notes
-                let linesPrinted = 0;
-                while (linesPrinted < textLines.length) {
-                    if (currentYPos >= pageHeight - margin - 10) {
-                        doc.addPage();
-                        currentYPos = margin;
-                        addFooter(); // Footer for previous page
-                        doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
-                        doc.text("Condition (Cont.)", margin, currentYPos);
-                        currentYPos += 6;
-                    }
-                    const linesToPrint = Math.min(textLines.length - linesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / lineHeight));
-                    doc.setFontSize(normalFontSize); doc.setFont("helvetica", "normal");
-                    doc.text(textLines.slice(linesPrinted, linesPrinted + linesToPrint), margin, currentYPos);
-                    currentYPos += linesToPrint * lineHeight;
-                    linesPrinted += linesToPrint;
-                }
+                printSectionTitle("Condition");
+                printMultiLineText(data.conditionNotes, normalFontSize, 0);
+                currentYPos += 5;
                 
                 // Disclaimer
-                currentYPos += 10;
-                
-                // Check for page break before Disclaimer title
-                if (currentYPos >= pageHeight - margin - 10) {
+                printSectionTitle("Disclaimer");
+                printMultiLineText(data.disclaimer, smallFontSize, 50);
+                currentYPos += 5;
+
+                // Methodology Header
+                if (currentYPos + 10 >= pageHeight - margin) {
                     doc.addPage();
                     currentYPos = margin;
+                    addFooter();
                 }
-                
-                doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
-                doc.text("Disclaimer", margin, currentYPos);
-                currentYPos += 6; 
-                doc.setFontSize(smallFontSize); doc.setTextColor(50);
-                textLines = doc.splitTextToSize(data.disclaimer, columnWidth);
-
-                // Auto-split text for Disclaimer
-                linesPrinted = 0;
-                while (linesPrinted < textLines.length) {
-                    if (currentYPos >= pageHeight - margin - 10) {
-                        doc.addPage();
-                        currentYPos = margin;
-                        addFooter(); // Footer for previous page
-                        doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold"); 
-                        doc.text("Disclaimer (Cont.)", margin, currentYPos);
-                        currentYPos += 6;
-                    }
-                    const linesToPrint = Math.min(textLines.length - linesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / lineHeight));
-                    doc.setFontSize(smallFontSize); doc.setTextColor(50);
-                    doc.text(textLines.slice(linesPrinted, linesPrinted + linesToPrint), margin, currentYPos);
-                    currentYPos += linesToPrint * lineHeight;
-                    linesPrinted += linesToPrint;
-                }
-
-                // Add footer to the last page used for Condition/Disclaimer
-                addFooter();
-
-                
-                // --- Page 3 (or later): Methodology and Sources ---
-                doc.addPage();
-                currentYPos = margin;
-                
-                // Print Methodology Header
                 doc.setFontSize(16); doc.setTextColor(0); doc.setFont("helvetica", "bold");
                 doc.text("Valuation Methodology and Sources", margin, currentYPos);
                 currentYPos += 10;
 
-                // Print Methodology Text
+                // Methodology Text
                 doc.setFontSize(normalFontSize); doc.setTextColor(50); doc.setFont("helvetica", "normal");
                 const methodologyText = `
 The final retail valuation is determined using a two-step process:
@@ -686,12 +646,30 @@ The final retail valuation is determined using a two-step process:
 2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / 0.65). The resulting figure is then rounded up to the nearest $5.00 to reflect typical retail pricing practices.
 The following online sources were referenced by the LLM in real-time to generate the identification details and the estimated wholesale price:
 `;
-                textLines = doc.splitTextToSize(methodologyText, columnWidth);
-                doc.text(textLines, margin, currentYPos);
-                currentYPos += textLines.length * lineHeight;
+                let textLines = doc.splitTextToSize(methodologyText, columnWidth);
+                
+                // Auto-split text for Methodology
+                let linesPrinted = 0;
+                while (linesPrinted < textLines.length) {
+                    if (currentYPos >= pageHeight - margin - 10) {
+                        doc.addPage();
+                        currentYPos = margin;
+                        addFooter();
+                        doc.setFontSize(normalFontSize); doc.setTextColor(50); doc.setFont("helvetica", "normal");
+                    }
+                    const linesToPrint = Math.min(textLines.length - linesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / lineHeight));
+                    doc.text(textLines.slice(linesPrinted, linesPrinted + linesToPrint), margin, currentYPos);
+                    currentYPos += linesToPrint * lineHeight;
+                    linesPrinted += linesToPrint;
+                }
+                currentYPos += 5;
 
                 // Print Sources
-                currentYPos += 5;
+                if (currentYPos + 10 >= pageHeight - margin) {
+                    doc.addPage();
+                    currentYPos = margin;
+                    addFooter();
+                }
                 doc.setFontSize(normalFontSize); doc.setTextColor(50); doc.setFont("helvetica", "bold"); 
                 doc.text("Referenced Sources:", margin, currentYPos);
                 currentYPos += 5; doc.setFont("helvetica", "normal"); doc.setFontSize(smallFontSize);
@@ -702,14 +680,19 @@ The following online sources were referenced by the LLM in real-time to generate
                     let sourceLines = doc.splitTextToSize(sourceText, columnWidth);
                     
                     // Page break handling for sources
-                    if (currentYPos + sourceLines.length * lineHeight > pageHeight - margin - 10) {
-                        doc.addPage();
-                        currentYPos = margin;
-                        addFooter(); // Footer for previous page
-                        doc.setFontSize(normalFontSize); doc.text("Sources (Cont.):", margin, currentYPos); currentYPos += 5;
+                    linesPrinted = 0;
+                    while (linesPrinted < sourceLines.length) {
+                        if (currentYPos + lineHeight > pageHeight - margin - 10) {
+                            doc.addPage();
+                            currentYPos = margin;
+                            addFooter(); 
+                            doc.setFontSize(normalFontSize); doc.text("Sources (Cont.):", margin, currentYPos); currentYPos += 5;
+                        }
+                        const linesToPrint = Math.min(sourceLines.length - linesPrinted, Math.floor((pageHeight - currentYPos - margin * 2) / lineHeight));
+                        doc.text(sourceLines.slice(linesPrinted, linesPrinted + linesToPrint), margin, currentYPos);
+                        currentYPos += linesToPrint * lineHeight;
+                        linesPrinted += linesToPrint;
                     }
-                    doc.text(sourceLines, margin, currentYPos);
-                    currentYPos += sourceLines.length * lineHeight;
                 });
                 
                 addFooter();
@@ -723,8 +706,6 @@ The following online sources were referenced by the LLM in real-time to generate
                 showMessage(`Failed to generate PDF. Error: ${error.message}`, 'error');
             } finally {
                 downloadButton.disabled = false;
-                // Note: No cleanup of temp containers needed as they were never created in this final version.
-                imagePreviewsContainer.style.display = originalDisplay;
             }
         });
     </script>
