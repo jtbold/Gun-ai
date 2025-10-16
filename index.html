@@ -435,9 +435,9 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
         
         // --- PDF Generation ---
         downloadButton.addEventListener('click', async () => {
-            // Check for valid report data before attempting PDF generation
+            // CRITICAL CHECK: Ensure data exists before trying to access properties
             if (!reportData || !reportData.valuation) {
-                 showMessage("Error: Cannot generate PDF. Report data is missing or incomplete.", 'error');
+                 showMessage("Error: Cannot generate PDF. Please run 'Generate Report' first.", 'error');
                  return;
             }
 
