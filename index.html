@@ -106,8 +106,7 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // --- CRITICAL SECURE API KEY ACCESS ---
-        // Reads the API Key securely injected by the VITE build process
+        // --- CRITICAL SECURE API KEY ACCESS (Vite Injection) ---
         const API_KEY = import.meta.env.VITE_API_KEY || "";
         // --- END API KEY ACCESS ---
 
@@ -117,9 +116,9 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? initialAuthToken : null;
         
         // --- Pricing Rule Parameters ---
-        const LOW_VALUE_THRESHOLD = 200.00; 
-        const RETAIL_MARKUP_DIVISOR = 0.65; 
-        const LOW_VALUE_RETAIL_OFFER_PERCENT = 0.50; 
+        const LOW_VALUE_THRESHOLD = 200.00; // Wholesale value at or below this triggers special rule
+        const RETAIL_MARKUP_DIVISOR = 0.65; // Base retail calculation: Wholesale / 0.65 (approx 35% GM)
+        const LOW_VALUE_RETAIL_OFFER_PERCENT = 0.50; // New rule: DPO = Retail * 0.50
         
         let reportData = null; 
         let app, db, auth, userId;
@@ -436,6 +435,12 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
         
         // --- PDF Generation ---
         downloadButton.addEventListener('click', async () => {
+            // Check for valid report data before attempting PDF generation
+            if (!reportData || !reportData.valuation) {
+                 showMessage("Error: Cannot generate PDF. Report data is missing or incomplete.", 'error');
+                 return;
+            }
+
             const { jsPDF } = window.jspdf;
             const reportElement = document.getElementById('report-container');
             showMessage("Preparing PDF for download...", 'info');
