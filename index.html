@@ -25,6 +25,19 @@
         /* CRITICAL MOBILE FIX: Wrapper for file input to overlay the button */
         .file-input-wrapper { position: relative; display: inline-block; }
         .file-input-wrapper input[type="file"] { position: absolute; top: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+        /* FIX: Styles for the off-screen print container (ensures it has rendered dimensions) */
+        #print-view-content { 
+            position: absolute; 
+            top: -9999px; 
+            left: -9999px; 
+            width: 800px; /* Explicit width for consistent capture */
+            background-color: white;
+            padding: 30px;
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+            visibility: hidden; /* Hide content from screen without display:none */
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
@@ -80,7 +93,7 @@
             <div id="status-message" class="text-sm text-center text-gray-600"></div>
         </div>
 
-        <div id="print-view-content" style="display: none;"></div>
+        <div id="print-view-content"></div>
         
         <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display: none;">
             <div id="report-header">
@@ -158,6 +171,7 @@
         const statusMessage = document.getElementById('status-message');
         const reportContainer = document.getElementById('report-container');
         const reportContent = document.getElementById('report-content');
+        // Print content element
         const printViewContent = document.getElementById('print-view-content'); 
 
         let selectedFiles = [];
@@ -342,7 +356,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     }
                     
                     const result = await response.json();
-                    let jsonText = result.candidates[0].content.parts[0].text.trim();
+                    let jsonText = result.candidates[0].content.parts[0].text.trim(); // Trim whitespace
                     
                     // --- FIX: ULTRA-AGGRESSIVE JSON EXTRACTION ---
                     const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
@@ -365,6 +379,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                         console.error("JSON Parsing Error. Raw response text:", jsonText);
                         throw new Error(`Could not parse JSON response from API. Response text: ${jsonText.substring(0, 50)}...`);
                     }
+                    // --- END ULTRA-AGGRESSIVE FIX ---
 
                     // Source extraction
                     report.sources = result.candidates[0].groundingMetadata?.groundingAttributions?.map(a => ({ uri: a.web?.uri, title: a.web?.title }))?.filter(s => s.uri && s.title) || [];
@@ -390,6 +405,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                         report.valuation.dealerPurchasePriceUSD = 'N/A';
                         report.valuation.projectedRetailPriceUSD = 'N/A';
                     }
+                    // --- END PRICING LOGIC ---
                     
                     // --- Display Report (For User View) ---
                     const reportHtml = `
@@ -424,7 +440,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     `;
                     reportContent.innerHTML = reportHtml;
 
-                    // --- Simplified content for Print View (no Tailwind classes) ---
+                    // --- NEW: Simplified content for Print View (Crucial for PDF stability) ---
                     printViewContent.innerHTML = `
                         <div style="padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1rem; text-align: center;">
                             <h3 style="font-size: 1.25rem; font-weight: bold; color: #d97706; margin: 0 auto 0.5rem;">Dealer Logo</h3>
@@ -488,8 +504,9 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             callApiWithRetry();
         });
         
-        // --- PDF Generation (OPTION 1: FIXED VERSION) ---
+        // --- PDF Generation (FINAL, RESILIENT VERSION) ---
         downloadButton.addEventListener('click', async () => {
+            // Check for report data existence
             if (!reportData || !reportData.valuation) {
                  showMessage("Error: Cannot generate PDF. Please run 'Generate Report' first.", 'error');
                  return;
@@ -498,35 +515,33 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             showMessage("Preparing PDF for download...", 'info');
             downloadButton.disabled = true;
 
-            // Temporarily hide image previews to prevent CORS issues
+            // FIX 1: Temporarily hide image previews
             const originalDisplay = imagePreviewsContainer.style.display;
             imagePreviewsContainer.style.display = 'none'; 
 
+            // FIX 2: Delay for DOM repaint
             setTimeout(async () => {
                 const { jsPDF } = window.jspdf;
                 
-                // CREATE TEMPORARY OFF-SCREEN CONTAINER
+                // --- FIX 5: Create a temporary, dynamic container for reliable capture ---
+                // This eliminates the chance of state conflicts with the existing off-screen element
                 const tempContainer = document.createElement('div');
                 tempContainer.style.position = 'absolute';
                 tempContainer.style.left = '-9999px';
                 tempContainer.style.top = '-9999px';
-                tempContainer.style.width = '800px';
+                tempContainer.style.width = '800px'; 
                 tempContainer.style.backgroundColor = 'white';
                 tempContainer.style.padding = '30px';
-                tempContainer.style.fontFamily = 'Inter, sans-serif';
                 tempContainer.style.boxSizing = 'border-box';
+                tempContainer.style.fontFamily = 'Inter, sans-serif';
                 
-                // Get content from print-view-content
+                // Copy the simplified content into the temporary container
                 const printContent = document.getElementById('print-view-content');
                 tempContainer.innerHTML = printContent.innerHTML;
-                
-                // Append to body temporarily
                 document.body.appendChild(tempContainer);
                 
                 const addFooter = (doc, margin, pageHeight) => {
-                    doc.setFontSize(8); 
-                    doc.setTextColor(150); 
-                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8); doc.setTextColor(150); doc.setFont("helvetica", "normal");
                     doc.text("WWW.Ludditelearning.com", margin, pageHeight - 5);
                 };
                 
@@ -541,27 +556,63 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     
                     // 1. Capture the temporary container (Page 1 - Report Content)
                     const reportCanvas = await html2canvas(tempContainer, { 
+                        // Using a scale of 2 for stable quality
                         scale: 2, 
-                        width: tempContainer.offsetWidth, 
+                        width: tempContainer.offsetWidth,
                         useCORS: true,
                         allowTaint: true
                     }); 
                     
                     const reportImgData = reportCanvas.toDataURL('image/jpeg', 1.0);
                     const reportRatio = reportCanvas.width / reportCanvas.height;
+                    
+                    // FIX: Recalculate dimensions based on page margins
                     const reportPdfWidth = pageWidth - margin * 2;
                     const reportPdfHeight = reportPdfWidth / reportRatio;
                     let currentYPos = margin;
                     
-                    doc.addImage(reportImgData, 'JPEG', margin, currentYPos, reportPdfWidth, reportPdfHeight);
-                    addFooter(doc, margin, pageHeight);
+                    // --- FIX: Implement auto-page splitting for the main report image ---
+                    const imgHeight = reportPdfHeight;
+                    const pageBoundary = pageHeight - margin * 2;
+                    let position = 0;
                     
-                    // 2. Add Valuation Methodology and Sources Page (Page 2)
+                    while (position < imgHeight) {
+                        if (position > 0) {
+                            doc.addPage();
+                        }
+                        
+                        // Calculate the height of the slice on this page
+                        let sliceHeight = Math.min(pageBoundary, imgHeight - position);
+                        
+                        // Calculate the negative offset to show the correct part of the image
+                        let imgOffset = -position * reportPdfWidth / reportCanvas.width;
+                        
+                        // Calculate the width/height of the PDF viewport for the slice
+                        let slicePdfHeight = (sliceHeight * reportCanvas.width) / reportPdfWidth;
+                        
+                        doc.addImage(
+                            reportImgData, 
+                            'JPEG', 
+                            margin, 
+                            margin + imgOffset, // Apply negative offset
+                            reportPdfWidth, 
+                            reportPdfHeight // Use full image height to enable slicing
+                        );
+                        
+                        // Move to the next slice position
+                        position += pageBoundary;
+                        
+                        addFooter(doc, margin, pageHeight);
+                    }
+                    // --- END AUTO-PAGE SPLITTING FIX ---
+                    
+                    
+                    // 2. Add Valuation Methodology and Sources Page
                     const methodologyTitle = "Valuation Methodology and Sources";
                     const methodologyText = `
 The final retail valuation is determined using a two-step process:
 1. Wholesale/Purchase Offer: The 'Dealer Purchase Offer' is the raw Wholesale/Dealer Acquisition Price provided by the Large Language Model (LLM). The LLM uses real-time Google Search grounding to find the lowest fair market trade-in value for a rifle matching the condition observed in the photos. The confidence level reflects the model's certainty in this acquired data.
-2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / 0.65). The resulting figure is then rounded up to the nearest $5.00 to reflect typical retail pricing practices.
+2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / 0.65). The resulting figure is then rounded up to the nearest \$5.00 to reflect typical retail pricing practices.
 The following online sources were referenced by the LLM in real-time to generate the identification details and the estimated wholesale price:
 `;
                     let sourceList = reportData.sources || [];
@@ -570,25 +621,16 @@ The following online sources were referenced by the LLM in real-time to generate
                     currentYPos = margin;
                     
                     // Print Title and Methodology
-                    doc.setFontSize(16); 
-                    doc.setTextColor(0); 
-                    doc.text(methodologyTitle, margin, currentYPos);
+                    doc.setFontSize(16); doc.setTextColor(0); doc.text(methodologyTitle, margin, currentYPos);
                     currentYPos += 10;
-                    doc.setFontSize(10); 
-                    doc.setTextColor(50); 
-                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(10); doc.setTextColor(50); doc.setFont("helvetica", "normal");
                     let textLines = doc.splitTextToSize(methodologyText, pageWidth - margin * 2);
                     doc.text(textLines, margin, currentYPos);
                     currentYPos += textLines.length * 4.5;
                     
                     // Print Sources
-                    doc.setFontSize(10); 
-                    doc.setTextColor(50); 
-                    doc.setFont("helvetica", "bold"); 
-                    doc.text("Referenced Sources:", margin, currentYPos);
-                    currentYPos += 5; 
-                    doc.setFont("helvetica", "normal"); 
-                    doc.setFontSize(9);
+                    doc.setFontSize(10); doc.setTextColor(50); doc.setFont("helvetica", "bold"); doc.text("Referenced Sources:", margin, currentYPos);
+                    currentYPos += 5; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     
                     sourceList.forEach((source, index) => {
                         const sourceText = `${index + 1}. ${source.title} (${source.uri || 'Source data synthesized'})`;
@@ -598,9 +640,7 @@ The following online sources were referenced by the LLM in real-time to generate
                         if (currentYPos + sourceLines.length * 4.5 > pageHeight - margin - 10) {
                             doc.addPage();
                             currentYPos = margin;
-                            doc.setFontSize(10); 
-                            doc.text("Sources (Cont.):", margin, currentYPos); 
-                            currentYPos += 5;
+                            doc.setFontSize(10); doc.text("Sources (Cont.):", margin, currentYPos); currentYPos += 5;
                             addFooter(doc, margin, pageHeight); 
                         }
                         doc.text(sourceLines, margin, currentYPos);
@@ -614,7 +654,7 @@ The following online sources were referenced by the LLM in real-time to generate
                     
                 } catch (error) {
                     console.error("PDF generation failed:", error);
-                    showMessage("Failed to generate PDF. Please try again.", 'error');
+                    showMessage(`Failed to generate PDF. Error: ${error.message}`, 'error');
                 } finally {
                     // CLEANUP: Remove temporary container
                     document.body.removeChild(tempContainer);
