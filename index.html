@@ -36,7 +36,7 @@
         
         <header class="text-center">
             <h2 id="cabelas-logo" class="mx-auto text-yellow-600 text-3xl font-bold mb-4">Dealer Logo</h2>
-            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Cabela's Valuation Tool</h1>
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Gun Valuation Tool</h1>
             <p class="text-gray-500">Upload, paste, or drag and drop photos to identify your firearm and generate a report.</p>
             <p id="user-id" class="text-xs text-gray-400 mt-2"></p>
         </header>
@@ -171,7 +171,8 @@
                     userId = auth.currentUser.uid;
                     document.getElementById('user-id').textContent = `User ID: ${userId}`;
                     isAuthReady = true;
-                    // Success! Exit function.
+                    // Success! Clear any error message and exit.
+                    showMessage("App loaded. Ready to generate report.", 'info');
                     return; 
                 } catch (error) {
                     console.error(`Firebase connection attempt ${attempt} failed:`, error);
@@ -181,8 +182,11 @@
                         await delay(1000 * attempt); 
                         showMessage(`Database connection failed. Retrying... (${attempt + 1}/${maxRetries})`, 'error');
                     } else {
-                        // Final failure after max retries
-                        document.getElementById('status-message').textContent = "Failed to connect to the database.";
+                        // FINAL FAILURE: Suppress the persistent error and force app ready state
+                        showMessage("Database audit logging is unavailable. Proceed with report generation.", 'error');
+                        isAuthReady = true; // CRITICAL: Force app ready state so AI functions can run
+                        userId = auth?.currentUser?.uid || crypto.randomUUID(); // Fallback ID
+                        document.getElementById('user-id').textContent = `User ID: ${userId} (Log Disabled)`;
                         return; // Exit on final failure
                     }
                 }
@@ -589,3 +593,4 @@ The following online sources were referenced by the LLM in real-time to generate
     </script>
 </body>
 </html>
+
