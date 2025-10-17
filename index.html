@@ -143,32 +143,49 @@
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            initFirebase();
+            initFirebase(3); // Start with 3 retries
         });
 
-        async function initFirebase() {
-            try {
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.warn("Firebase config missing. Running without persistence.");
+        async function initFirebase(maxRetries) {
+            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    if (Object.keys(firebaseConfig).length === 0) {
+                        isAuthReady = true;
+                        userId = crypto.randomUUID();
+                        document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
+                        return;
+                    }
+                    
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    userId = auth.currentUser.uid;
+                    document.getElementById('user-id').textContent = `User ID: ${userId}`;
                     isAuthReady = true;
-                    userId = crypto.randomUUID();
-                    document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
-                    return;
+                    // Success! Exit function.
+                    return; 
+                } catch (error) {
+                    console.error(`Firebase connection attempt ${attempt} failed:`, error);
+                    
+                    if (attempt < maxRetries) {
+                        // Wait longer for the next attempt (exponential backoff: 1s, 2s)
+                        await delay(1000 * attempt); 
+                        showMessage(`Database connection failed. Retrying... (${attempt + 1}/${maxRetries})`, 'error');
+                    } else {
+                        // Final failure after max retries
+                        document.getElementById('status-message').textContent = "Failed to connect to the database.";
+                        return; // Exit on final failure
+                    }
                 }
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                userId = auth.currentUser.uid;
-                document.getElementById('user-id').textContent = `User ID: ${userId}`;
-                isAuthReady = true;
-            } catch (error) {
-                console.error("Firebase initialization error:", error);
-                document.getElementById('status-message').textContent = "Failed to connect to the database.";
             }
         }
         
@@ -457,7 +474,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
             
             // --- Footer Function ---
             const addFooter = (doc, margin, pageHeight) => {
-                doc.setFontSize(12);
+                doc.setFontSize(8);
                 doc.setTextColor(150); 
                 doc.setFont("helvetica", "normal"); 
                 const footerText = "WWW.Ludditelearning.com";
