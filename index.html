@@ -367,7 +367,7 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     }
                     
                     const result = await response.json();
-                    let jsonText = result.candidates?.[0]?.content?.[0]?.parts?.[0]?.text || '';
+                    let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     
                     if (!jsonText) {
                         throw new Error("Model returned empty or invalid response structure.");
@@ -587,4 +587,3 @@ The following online sources were referenced by the LLM in real-time to generate
     </script>
 </body>
 </html>
-
