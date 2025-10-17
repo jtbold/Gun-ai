@@ -273,7 +273,7 @@
         urlButton.addEventListener('click', async () => {
             const url = urlInput.value.trim();
             if (!url || selectedFiles.length >= MAX_FILES) { showMessage('Invalid URL or max images reached.', 'error'); return; }
-            if (!url.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i)) { showMessage('URL does not look like an image link.', 'error'); return; }
+            if (!url.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i)) { showMessage('URL does looks like an image link.', 'error'); return; }
             
             showMessage('Fetching image from URL...', 'info');
             urlButton.disabled = true;
@@ -369,8 +369,9 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     const result = await response.json();
                     let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     
-                    if (!jsonText) {
-                        throw new Error("Model returned empty or invalid response structure.");
+                    // CRITICAL FIX: Enhanced check for empty/invalid response structure
+                    if (!jsonText || jsonText.trim().length < 10) { 
+                        throw new Error("Model returned empty or invalid response structure. Check network stability.");
                     }
 
                     // Robust JSON Parsing
@@ -450,7 +451,8 @@ You are a firearms appraiser specializing in dealer trade-in valuations. Identif
                     // ...
                 } catch (error) {
                     console.error("Report generation failed:", error);
-                    showMessage(`Failed to generate report: ${error.message}`, 'error');
+                    // CRITICAL: Display a very specific error message for mobile failures
+                    showMessage(`Failed to generate report: Model returned empty or invalid response structure. This is often caused by mobile network instability or image upload failure. Please try fewer images or a stronger Wi-Fi connection.`, 'error');
                 } finally {
                     // CRITICAL: Always re-enable button and clear status display on completion/error
                     generateButton.disabled = false;
