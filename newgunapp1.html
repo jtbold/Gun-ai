@@ -455,10 +455,9 @@
                     showMessage("Step 2/3: Sending request to image analysis model...", 'info');
                     const userNotes = notesInput.value.trim();
                     
-                    // --- UPDATED PROMPT FOR STABILITY AND SEARCH ---
+                    // --- UPDATED PROMPT FOR STABILITY ---
                     const reportPrompt = `
-You are a firearms historian and appraiser specializing in dealer trade-in valuations.
-Your task is to identify the firearm from the provided photos and create a concise, professional report.
+You are a firearms historian and appraiser specializing in dealer trade-in valuations. Your task is to identify the firearm from the provided photos and create a concise, professional report.
 Return ONLY valid JSON with the following structure. Do NOT include any source citations or notations in the text, such as [1], [2], etc.
 {
   "modelGuess": "string",
@@ -473,8 +472,7 @@ Return ONLY valid JSON with the following structure. Do NOT include any source c
     "valuationConfidence": "string" 
   }
 }
-CRITICAL: You must provide a clear single numerical value for "wholesaleValueEstimateUSD" (e.g., "500") without dollar signs or ranges.
-This must be the lowest fair market trade-in price for the firearm's exact condition, found using the search tool.
+CRITICAL: You must provide a clear single numerical value for "wholesaleValueEstimateUSD" (e.g., "500") without dollar signs or ranges. This must be the lowest fair market trade-in price for the firearm's exact condition.
 - Identify the firearm model, caliber, and key markings.
 - Provide a brief historical context for the model (History field).
 - Provide a brief note on the firearm's condition as seen in the photos (ConditionNotes field).
@@ -496,8 +494,8 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                                 }))
                             ]
                         }],
-                        // --- GOOGLE SEARCH TOOL RE-ENABLED ---
-                        tools: [{ "google_search": {} }],
+                        // --- GOOGLE SEARCH TOOL COMMENTED OUT FOR STABILITY ---
+                        // tools: [{ "google_search": {} }],
                     };
                     
                     // --- MODEL NAME FIX APPLIED HERE: gemini-2.5-flash ---
@@ -534,6 +532,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     }
                     
                     // --- Extract grounding sources (for Sources Page) ---
+                    // NOTE: Since the tool is disabled, this section will always yield an empty source list.
                     let sources = [];
                     const groundingMetadata = result.candidates[0].groundingMetadata;
                     if (groundingMetadata && groundingMetadata.groundingAttributions) {
@@ -578,7 +577,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     // --- Custom Calculation: Retail Price (Markup Calculation) ---
                     const wholesaleValueStr = report.valuation.wholesaleValueEstimateUSD.replace(/[$,]/g, '').trim();
                     let wholesaleValue = 0;
-                    // NOTE: The model must now generate a valuation based on external search results.
+                    // NOTE: The model must now generate a valuation based only on its internal knowledge and image analysis.
                     if (wholesaleValueStr.includes('-')) {
                         const parts = wholesaleValueStr.split('-').map(p => parseFloat(p.trim()));
                         if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -829,13 +828,12 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                 
                 // 3. Add Valuation Methodology and Sources Page (Page 3 or later)
                 const methodologyTitle = "Valuation Methodology and Sources";
-                // NOTE: The methodology text has been updated to reflect the enabled search tool.
+                // NOTE: The methodology text has been updated to reflect the disabled search tool.
                 const methodologyText = `
 The final retail valuation is determined using a two-step process:
 
-1. Wholesale/Purchase Offer: The 'Dealer Purchase Offer' is the raw Wholesale/Dealer Acquisition Price provided by the Large Language Model (LLM).
-The LLM uses real-time Google Search grounding to find the lowest fair market trade-in value for a rifle matching the condition observed in the photos.
-The confidence level reflects the model's certainty in this acquired data.
+1. Wholesale/Purchase Offer: The 'Dealer Purchase Offer' is the Wholesale/Dealer Acquisition Price provided by the Large Language Model (LLM) based on its internal knowledge base.
+The confidence level reflects the model's certainty in this estimate.
 2. Projected Retail Value: This value is calculated by applying a standard industry markup to the Purchase Offer (Wholesale Price / 0.65).
 The resulting figure is then rounded up to the nearest $5.00 to reflect typical retail pricing practices.
 The following online sources were referenced by the LLM in real-time to generate the identification details and the estimated wholesale price:
@@ -846,7 +844,7 @@ The following online sources were referenced by the LLM in real-time to generate
                 if (sourceList.length === 0) {
                     sourceList.push({
                         title: "General Market Data (Aggregated by LLM)",
-                        uri: "Valuation synthesized from publicly available auction, retail, and wholesale pricing data found via Google Search."
+                        uri: "Valuation synthesized from publicly available auction, retail, and wholesale pricing data found via internal model knowledge."
                     });
                 }
 
