@@ -103,8 +103,7 @@
 
         // ***************************************************************
         // CRITICAL SECURITY: The API key is set to an empty string.
-        // For local testing, you must manually paste your new key here.
-        // For production, the key should be injected securely by your hosting service.
+        // This line MUST be replaced by the build script (render_build.sh).
         const API_KEY = "";
         // ***************************************************************
         
@@ -279,7 +278,7 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // --- CRITICAL FIX: Using PNG encoding for stability test ---
+                    // Using PNG encoding for stability test
                     canvas.toBlob(blob => {
                         // Use PNG mime type
                         const resizedFile = new File([blob], file.name, { type: 'image/png' });
@@ -399,6 +398,7 @@
 
         generateButton.addEventListener('click', async () => {
             if (!API_KEY) {
+                // This message should only appear if the build script failed to inject the key.
                 showMessage("API Key is missing. Please set your new API key.", 'error');
                 return;
             }
