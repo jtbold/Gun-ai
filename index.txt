@@ -279,7 +279,7 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // --- CRITICAL FIX: Changing to PNG encoding for stability test ---
+                    // --- CRITICAL FIX: Using PNG encoding for stability test ---
                     canvas.toBlob(blob => {
                         // Use PNG mime type
                         const resizedFile = new File([blob], file.name, { type: 'image/png' });
