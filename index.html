@@ -115,7 +115,7 @@
         // Variable to hold the report data
 
         // --- Firebase Initialization ---
-        let app, db = null, auth, userId; // Initialize db to null to prevent crash
+        let app, db = null, auth, userId; 
         let isAuthReady = false;
 
         async function initFirebase() {
@@ -672,9 +672,14 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     // --- Save to Firestore (ISOLATED BLOCK) ---
                     if (isAuthReady && db) {
                         try {
-                            const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
-                            await setDoc(reportRef, report);
-                            console.log("Report saved to Firestore.");
+                            // Check for db integrity before attempting setDoc
+                            if (db) { 
+                                const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
+                                await setDoc(reportRef, report);
+                                console.log("Report saved to Firestore.");
+                            } else {
+                                throw new Error("Firestore instance is null.");
+                            }
                         } catch (dbError) {
                             // Log the DB error, but do NOT crash the report display/download.
                             console.error("Failed to save report to Firestore:", dbError);
