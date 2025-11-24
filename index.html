@@ -134,7 +134,7 @@
                 auth = getAuth(app);
 
                 if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
+                    await signInWithCustomToken(auth, initialAuthAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
@@ -663,14 +663,21 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                         <p><strong>Disclaimer:</strong> ${report.disclaimer}</p>
                     </div>`;
                     reportContainer.style.display = 'block';
+                    // --- BUTTON IS MADE VISIBLE HERE ---
                     downloadButton.classList.remove('hidden');
                     showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
 
-                    // --- Save to Firestore ---
+                    // --- Save to Firestore (ISOLATED BLOCK) ---
                     if (isAuthReady && db) {
-                        const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
-                        await setDoc(reportRef, report);
-                        console.log("Report saved to Firestore.");
+                        try {
+                            const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
+                            await setDoc(reportRef, report);
+                            console.log("Report saved to Firestore.");
+                        } catch (dbError) {
+                            // Log the DB error, but do NOT crash the report display/download.
+                            console.error("Failed to save report to Firestore:", dbError);
+                            showMessage("Report generated, but failed to save to database.", 'warning');
+                        }
                     }
                 } catch (error) {
                     console.error("Report generation error:", error);
