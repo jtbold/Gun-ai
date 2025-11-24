@@ -115,7 +115,7 @@
         // Variable to hold the report data
 
         // --- Firebase Initialization ---
-        let app, db, auth, userId;
+        let app, db = null, auth, userId; // Initialize db to null to prevent crash
         let isAuthReady = false;
 
         async function initFirebase() {
@@ -130,11 +130,11 @@
                 }
 
                 app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
+                db = getFirestore(app); // <-- db is initialized here if config exists
                 auth = getAuth(app);
 
                 if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthAuthToken);
+                    await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
@@ -145,6 +145,8 @@
                 console.log("Firebase initialized successfully.");
             } catch (error) {
                 console.error("Firebase initialization error:", error);
+                // If initialization fails, ensure db remains null
+                db = null; 
                 document.getElementById('status-message').textContent = "Failed to connect to the database. Some features may not work.";
             }
         }
