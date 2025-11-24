@@ -192,8 +192,8 @@
 
         function toggleGenerateButton() {
             generateButton.disabled = selectedFiles.length === 0;
-            // claudeButton.disabled = selectedFiles.length === 0; // REMOVED
-            if (selectedFiles.length === 0) {
+            // The download button should remain visible if a report has been successfully generated.
+            if (selectedFiles.length === 0 && !reportData) {
                 downloadButton.classList.add('hidden');
             }
         }
@@ -421,6 +421,9 @@
 
             // Function to reset UI and clear resources
             const resetUIAndResources = async () => {
+                // Set reportData to null to ensure toggleGenerateButton correctly hides the download button
+                // if the user removes images *after* viewing a report.
+                reportData = null; 
                 selectedFiles = [];
                 fileInput.value = '';
                 showPreviews();
@@ -665,7 +668,8 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                         <p><strong>Disclaimer:</strong> ${report.disclaimer}</p>
                     </div>`;
                     reportContainer.style.display = 'block';
-                    // --- BUTTON IS MADE VISIBLE HERE ---
+                    
+                    // --- BUTTON IS MADE VISIBLE HERE (CRITICAL FIX) ---
                     downloadButton.classList.remove('hidden');
                     showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
 
@@ -678,7 +682,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                                 await setDoc(reportRef, report);
                                 console.log("Report saved to Firestore.");
                             } else {
-                                throw new Error("Firestore instance is null.");
+                                throw new Error("Firestore instance is null (Check config).");
                             }
                         } catch (dbError) {
                             // Log the DB error, but do NOT crash the report display/download.
@@ -925,7 +929,9 @@ The following online sources were referenced by the LLM in real-time to generate
                 console.error("PDF generation failed:", error);
                 showMessage("Failed to generate PDF. Please try again.", 'error');
             } finally {
-                downloadButton.disabled = false;
+                // --- Final cleanup after success or failure ---
+                await resetUIAndResources();
+                generateButton.disabled = false;
             }
         });
     </script>
