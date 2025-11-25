@@ -113,10 +113,16 @@
 
         let reportData = null;
         // Variable to hold the report data
+        
+        let selectedFiles = []; // Currently uploaded images
+        // CRITICAL FIX: NEW GLOBAL VARIABLE TO HOLD IMAGES FOR PDF DOWNLOAD
+        let originalFiles = []; // Images associated with the successfully generated report
 
         // --- Firebase Initialization ---
         let app, db = null, auth, userId; 
         let isAuthReady = false;
+        
+        // ... (Remaining Firebase setup and utility functions are unchanged) ...
 
         async function initFirebase() {
             try {
@@ -167,7 +173,7 @@
         const reportContainer = document.getElementById('report-container');
         const reportContent = document.getElementById('report-content');
 
-        let selectedFiles = [];
+        
         const MAX_FILES = 6;
         const MAX_FILE_SIZE_MB = 4;
         const MAX_IMAGE_SIDE_PX = 800;
@@ -419,15 +425,18 @@
             
             let retries = 0;
             const MAX_RETRIES = 3;
-            let originalFiles = [...selectedFiles]; // Preserve original files for preview until success
+            // CRITICAL FIX: Store the images associated with THIS specific report instance globally
+            originalFiles = [...selectedFiles]; 
 
             // Function to reset UI and clear resources (Modified to NOT touch download button visibility)
             const resetUIAndResources = async () => {
-                reportData = null; // Clear the report data if called after an error
+                // Note: reportData is ONLY set to null if a failure occurs in the catch block
                 selectedFiles = [];
                 fileInput.value = '';
                 showPreviews();
-                toggleGenerateButton(); // This will now hide the button if there is no reportData
+                // We no longer call toggleGenerateButton here, only explicitly when images are added/removed.
+                // If this is called after an error, the error handler explicitly sets reportData = null,
+                // ensuring the download button is correctly hidden next time.
                 // Mandatory short delay (500ms) to allow resources to clear before next run
                 await new Promise(res => setTimeout(res, 500));
             }
@@ -669,7 +678,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     </div>`;
                     reportContainer.style.display = 'block';
                     
-                    // --- BUTTON IS MADE VISIBLE HERE (CRITICAL FIX: NOT IN THE FINALLY BLOCK) ---
+                    // --- BUTTON IS MADE VISIBLE HERE (CRITICAL FIX) ---
                     downloadButton.classList.remove('hidden');
                     showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
 
@@ -757,7 +766,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
 
 
                 // 2. Add Images (Starting on a new page if necessary, or continuing Page 1)
-                if (selectedFiles.length > 0) {
+                if (originalFiles.length > 0) { // CRITICAL FIX: Check global originalFiles
                     
                     // --- Reference Title Logic ---
                     
@@ -798,7 +807,7 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     const singleImgWidth = (pageWidth - margin * 2 - imagePadding) / 2;
                     let rowMaxHeight = 0;
                     
-                    for (let i = 0; i < originalFiles.length; i++) { // Use originalFiles for PDF generation
+                    for (let i = 0; i < originalFiles.length; i++) { // Use global originalFiles
                         const file = originalFiles[i];
                         const reader = new FileReader();
                         reader.readAsDataURL(file);
