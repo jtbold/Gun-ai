@@ -113,16 +113,14 @@
 
         let reportData = null;
         // Variable to hold the report data
-        
+
         let selectedFiles = []; // Currently uploaded images
-        // CRITICAL FIX: NEW GLOBAL VARIABLE TO HOLD IMAGES FOR PDF DOWNLOAD
+        // GLOBAL VARIABLE TO HOLD IMAGES FOR PDF DOWNLOAD
         let originalFiles = []; // Images associated with the successfully generated report
 
         // --- Firebase Initialization ---
         let app, db = null, auth, userId; 
         let isAuthReady = false;
-        
-        // ... (Remaining Firebase setup and utility functions are unchanged) ...
 
         async function initFirebase() {
             try {
@@ -434,9 +432,7 @@
                 selectedFiles = [];
                 fileInput.value = '';
                 showPreviews();
-                // We no longer call toggleGenerateButton here, only explicitly when images are added/removed.
-                // If this is called after an error, the error handler explicitly sets reportData = null,
-                // ensuring the download button is correctly hidden next time.
+                // We no longer call toggleGenerateButton here.
                 // Mandatory short delay (500ms) to allow resources to clear before next run
                 await new Promise(res => setTimeout(res, 500));
             }
@@ -936,9 +932,11 @@ The following online sources were referenced by the LLM in real-time to generate
                 doc.save(sanitizedFilename);
                 showMessage("PDF download started!", 'info');
             } catch (error) {
+                // If PDF generation fails, report it.
                 console.error("PDF generation failed:", error);
                 showMessage("Failed to generate PDF. Please try again.", 'error');
             } finally {
+                // Always ensure the button is re-enabled if the download process completes/fails.
                 downloadButton.disabled = false;
             }
         });
