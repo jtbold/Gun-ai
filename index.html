@@ -193,6 +193,7 @@
         function toggleGenerateButton() {
             generateButton.disabled = selectedFiles.length === 0;
             // CRITICAL FIX: Only hide the download button if there is NO generated report data.
+            // This ensures the button remains visible after successful generation.
             if (selectedFiles.length === 0 && !reportData) {
                 downloadButton.classList.add('hidden');
             }
@@ -420,13 +421,13 @@
             const MAX_RETRIES = 3;
             let originalFiles = [...selectedFiles]; // Preserve original files for preview until success
 
-            // Function to reset UI and clear resources
+            // Function to reset UI and clear resources (Modified to NOT touch download button visibility)
             const resetUIAndResources = async () => {
-                // We keep reportData intact here if the generation was successful.
+                reportData = null; // Clear the report data if called after an error
                 selectedFiles = [];
                 fileInput.value = '';
                 showPreviews();
-                toggleGenerateButton();
+                toggleGenerateButton(); // This will now hide the button if there is no reportData
                 // Mandatory short delay (500ms) to allow resources to clear before next run
                 await new Promise(res => setTimeout(res, 500));
             }
@@ -668,12 +669,11 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     </div>`;
                     reportContainer.style.display = 'block';
                     
-                    // --- BUTTON IS MADE VISIBLE HERE (CRITICAL FIX) ---
+                    // --- BUTTON IS MADE VISIBLE HERE (CRITICAL FIX: NOT IN THE FINALLY BLOCK) ---
                     downloadButton.classList.remove('hidden');
                     showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
 
                     // --- Save to Firestore (ISOLATED BLOCK) ---
-                    // This block runs *after* the UI update, ensuring no crash can hide the button.
                     if (isAuthReady && db) {
                         try {
                             if (db) { 
@@ -692,9 +692,9 @@ This must be the lowest fair market trade-in price for the firearm's exact condi
                     console.error("Report generation error:", error);
                     showMessage(`Failed to generate report: ${error.message}`, 'error');
                     
-                    // CRITICAL FIX: Only reset state (clear images) if the generate failed.
-                    reportData = null; // Ensure the toggle button logic runs correctly next time.
-                    await resetUIAndResources();
+                    // CRITICAL FIX: Only reset state (clear images/hide button) if the generate failed.
+                    reportData = null; 
+                    await resetUIAndResources(); // Only reset on error
                 } finally {
                     // --- Final cleanup only disables the button, it does NOT hide the download button ---
                     generateButton.disabled = false;
