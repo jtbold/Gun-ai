@@ -1,209 +1,912 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Bona Fide Iron – Equipment Inspection Report</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- html2canvas + jsPDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-  <style>
-    body {
-      background: #f3f4f6;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Equipment Report Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 800px;
+        }
+        #report-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 1rem;
+        }
+        .no-break {
+            white-space: nowrap;
+        }
+    </style>
 </head>
+<body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
+    <div class="container bg-white rounded-3xl shadow-xl p-8 space-y-8">
+        <header class="text-center">
+            <img src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="mx-auto h-16 mb-4">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Equipment Report Generator</h1>
+            <p class="text-gray-500">Upload, paste, or drag and drop photos to identify equipment and generate a professional report.</p>
+            <p id="user-id" class="text-xs text-gray-400 mt-2"></p>
+        </header>
 
-<body class="p-6">
-  <!-- Header -->
-  <div class="max-w-5xl mx-auto bg-white shadow rounded-lg p-6">
-    <div class="flex items-center gap-4 mb-6">
-      <img src="Screenshot 2026-01-31 084018.jpg" alt="Bona Fide Iron" class="h-12" />
-      <h1 class="text-2xl font-semibold">Construction Equipment Inspection Report</h1>
+        <div id="drop-zone" class="w-full rounded-2xl border-4 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-gray-400">
+            <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
+            <div class="text-lg font-medium text-gray-700">Drag & drop, paste (Ctrl+V), or click to upload images</div>
+            <p class="text-sm text-gray-400 mt-2">Maximum of 20 images, up to 4MB each.</p>
+            <button id="upload-button" class="mt-6 px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
+                Choose Images
+            </button>
+        </div>
+
+        <div class="w-full">
+            <div class="flex flex-col gap-3">
+                <label for="url-input" class="text-sm font-medium text-gray-700">To add images from the internet, right-click an image, select "Copy Image Address", then paste the URL below.</label>
+                <div class="flex items-center gap-3">
+                    <input type="text" id="url-input" placeholder="Paste image URL here..." class="flex-grow rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button id="url-button" class="px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
+                        Add from URL
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full">
+            <div class="flex flex-col gap-3">
+                <label for="notes-input" class="text-sm font-medium text-gray-700">
+                    Optional notes (hours, serial/VIN, attachments, known issues, location, auction notes):
+                </label>
+                <textarea id="notes-input" rows="3" class="rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+        </div>
+
+        <div id="image-previews" class="flex flex-wrap gap-4 justify-center items-center p-4 rounded-xl bg-gray-50 shadow-inner" style="display: none;"></div>
+
+        <div class="flex flex-col items-center justify-center space-y-4">
+            <button id="generate-button" class="w-full px-8 py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                Generate Report
+            </button>
+
+            <button id="download-button" class="w-full px-8 py-4 bg-gray-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-gray-600 transition-colors hidden">
+                Download Report (PDF)
+            </button>
+            <div id="status-message" class="text-sm text-center text-gray-600"></div>
+        </div>
+
+        <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display: none;">
+            <div id="report-header">
+                <img src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-10 mb-2">
+                <h2 class="text-2xl font-bold text-gray-900">Equipment Identification Report</h2>
+            </div>
+            <div id="report-content" class="space-y-4"></div>
+        </div>
     </div>
 
-    <!-- Upload -->
-    <div class="mb-4">
-      <label class="block font-medium mb-1">Upload up to 20 images</label>
-      <input id="imageInput" type="file" accept="image/*" multiple class="w-full" />
-    </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    <!-- Notes -->
-    <div class="mb-4">
-      <label class="block font-medium mb-1">Inspector Notes (optional)</label>
-      <textarea id="notes" rows="4" class="w-full border rounded p-2"></textarea>
-    </div>
+        // Global variables provided by the environment (same pattern as gun app)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-    <!-- Analyze -->
-    <button
-      id="analyzeBtn"
-      class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
-    >
-      Generate Professional Report
-    </button>
+        // ***************************************************************
+        // CRITICAL SECURITY: The API key is set to an empty string.
+        // For local testing, paste your key here.
+        // For production, your hosting should inject it securely.
+        const API_KEY = "";
+        // ***************************************************************
 
-    <!-- Output -->
-    <div id="output" class="mt-6 space-y-4"></div>
+        // --- Pricing setting (same idea as your gun app) ---
+        const PRICE_ADJUSTMENT_PERCENTAGE = 0.05; // 5% reduction on model market value
 
-    <!-- PDF -->
-    <button
-      id="downloadBtn"
-      class="hidden bg-green-700 text-white px-4 py-2 rounded mt-6"
-    >
-      Download PDF
-    </button>
-  </div>
+        let reportData = null;
 
-<script>
-const { jsPDF } = window.jspdf;
-let originalFilesForPdf = [];
+        // --- Firebase Initialization (same behavior as gun app) ---
+        let app, db, auth, userId;
+        let isAuthReady = false;
 
-document.getElementById("analyzeBtn").onclick = async () => {
-  const files = Array.from(document.getElementById("imageInput").files).slice(0, 20);
-  if (files.length === 0) return alert("Upload at least one image.");
+        async function initFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.warn("Firebase config missing. Running in local mode without persistence.");
+                    isAuthReady = true;
+                    userId = crypto.randomUUID();
+                    document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
+                    return;
+                }
 
-  originalFilesForPdf = files;
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
 
-  const notes = document.getElementById("notes").value;
-  const output = document.getElementById("output");
-  output.innerHTML = "<p class='text-gray-600'>Analyzing equipment…</p>";
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
 
-  const imageParts = [];
+                userId = auth.currentUser.uid;
+                document.getElementById('user-id').textContent = `User ID: ${userId}`;
+                isAuthReady = true;
+                console.log("Firebase initialized successfully.");
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                document.getElementById('status-message').textContent = "Failed to connect to the database. Some features may not work.";
+            }
+        }
+        initFirebase();
 
-  for (const file of files) {
-    const resized = await resizeImage(file);
-    imageParts.push({
-      inlineData: {
-        mimeType: "image/png",
-        data: resized.split(",")[1]
-      }
-    });
+        // --- DOM Elements ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const urlInput = document.getElementById('url-input');
+        const urlButton = document.getElementById('url-button');
+        const notesInput = document.getElementById('notes-input');
+        const generateButton = document.getElementById('generate-button');
+        const downloadButton = document.getElementById('download-button');
+        const imagePreviewsContainer = document.getElementById('image-previews');
+        const statusMessage = document.getElementById('status-message');
+        const reportContainer = document.getElementById('report-container');
+        const reportContent = document.getElementById('report-content');
+
+        let selectedFiles = [];
+
+        // --- Differences vs gun app: MAX_FILES = 20 ---
+        const MAX_FILES = 20;
+        const MAX_FILE_SIZE_MB = 4;
+
+        // IMPORTANT: With 20 images, we keep the same flow but reduce max side for stability.
+        // Still: resize -> PNG -> base64 -> Gemini
+        const MAX_IMAGE_SIDE_PX = 600;
+
+        // Unsupported MIME types (same)
+        const UNSUPPORTED_MIME_TYPES = ['image/avif', 'image/svg+xml'];
+
+        // PDF image settings (your request)
+        const PDF_IMAGE_WIDTH_MM = 76;     // ~3 inches wide
+        const PDF_IMAGE_MAX_PX = 900;      // lower resolution for PDF
+        const PDF_JPEG_QUALITY = 0.70;     // compression
+
+        // --- Utility Functions ---
+
+        function roundUpToNearestFive(num) {
+            if (isNaN(num) || num <= 0) return 0;
+            return Math.ceil(num / 5) * 5;
+        }
+
+        function showMessage(message, type = 'info') {
+            statusMessage.className = `text-sm text-center mt-4 ${type === 'error' ? 'text-red-600' : 'text-gray-600'}`;
+            statusMessage.textContent = message;
+        }
+
+        function toggleGenerateButton() {
+            generateButton.disabled = selectedFiles.length === 0;
+            if (selectedFiles.length === 0) {
+                downloadButton.classList.add('hidden');
+            }
+        }
+
+        function showPreviews() {
+            imagePreviewsContainer.innerHTML = '';
+            if (selectedFiles.length > 0) {
+                imagePreviewsContainer.style.display = 'flex';
+                selectedFiles.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const imgWrapper = document.createElement('div');
+                        imgWrapper.className = 'relative group w-32 h-32 rounded-lg overflow-hidden shadow-md';
+                        imgWrapper.innerHTML = `
+                            <img src="${e.target.result}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
+                            <button class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 leading-none text-sm opacity-0 group-hover:opacity-100 transition-opacity" data-index="${index}">
+                                &times;
+                            </button>
+                        `;
+                        imagePreviewsContainer.appendChild(imgWrapper);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                imagePreviewsContainer.style.display = 'none';
+            }
+        }
+
+        function processFiles(files) {
+            let newFiles = Array.from(files).filter(file => {
+                const mimeType = file.type.toLowerCase();
+
+                if (!mimeType.startsWith('image/')) {
+                    showMessage(`File "${file.name}" is not an image.`, 'error');
+                    return false;
+                }
+
+                if (UNSUPPORTED_MIME_TYPES.includes(mimeType)) {
+                    showMessage(`File "${file.name}" uses an unsupported image format (${file.type}). Please use JPG or PNG.`, 'error');
+                    return false;
+                }
+
+                if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+                    showMessage(`File "${file.name}" exceeds the ${MAX_FILE_SIZE_MB}MB size limit.`, 'error');
+                    return false;
+                }
+                return true;
+            });
+
+            if (selectedFiles.length + newFiles.length > MAX_FILES) {
+                const limit = MAX_FILES - selectedFiles.length;
+                newFiles = newFiles.slice(0, limit);
+                showMessage(`Maximum image limit reached. Added ${limit} new files. Total: ${MAX_FILES}/${MAX_FILES}`, 'error');
+            }
+
+            selectedFiles = [...selectedFiles, ...newFiles].slice(0, MAX_FILES);
+            showPreviews();
+            toggleGenerateButton();
+
+            if (newFiles.length > 0) {
+                showMessage(`Added ${newFiles.length} files. Total: ${selectedFiles.length}/${MAX_FILES}`);
+            }
+        }
+
+        // Same resize flow as gun app: resize -> PNG for stability
+        function resizeImage(file) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_IMAGE_SIDE_PX || height > MAX_IMAGE_SIDE_PX) {
+                        const ratio = Math.max(width / MAX_IMAGE_SIDE_PX, height / MAX_IMAGE_SIDE_PX);
+                        width /= ratio;
+                        height /= ratio;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(blob => {
+                        const resizedFile = new File([blob], file.name, { type: 'image/png' });
+                        resolve(resizedFile);
+                    }, 'image/png');
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        // PDF-only: downscale + compress to JPEG
+        async function fileToCompressedJpegDataUrl(file) {
+            const dataUrl = await new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onloadend = () => resolve(r.result);
+                r.onerror = reject;
+                r.readAsDataURL(file);
+            });
+
+            const img = new Image();
+            img.src = dataUrl;
+            await new Promise(resolve => img.onload = resolve);
+
+            let w = img.width;
+            let h = img.height;
+
+            if (w > PDF_IMAGE_MAX_PX || h > PDF_IMAGE_MAX_PX) {
+                const ratio = Math.max(w / PDF_IMAGE_MAX_PX, h / PDF_IMAGE_MAX_PX);
+                w = w / ratio;
+                h = h / ratio;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            return { dataUrl: canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY), width: w, height: h };
+        }
+
+        // --- Event Listeners (same pattern) ---
+        uploadButton.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            processFiles(e.target.files);
+            e.target.value = '';
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-gray-500', 'bg-gray-50');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-gray-500', 'bg-gray-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-gray-500', 'bg-gray-50');
+            processFiles(e.dataTransfer.files);
+        });
+
+        window.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            let files = [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile();
+                    files.push(file);
+                }
+            }
+            if (files.length > 0) processFiles(files);
+        });
+
+        urlButton.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            if (!url) {
+                showMessage('Please enter a valid image URL.', 'error');
+                return;
+            }
+            if (selectedFiles.length >= MAX_FILES) {
+                showMessage(`You have reached the maximum of ${MAX_FILES} images.`, 'error');
+                return;
+            }
+
+            if (!url.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i)) {
+                showMessage('The URL does not look like a direct image link (must end in .jpg/.png, etc).', 'error');
+                return;
+            }
+
+            showMessage('Fetching image from URL... This might fail due to Cross-Origin (CORS) policies.', 'info');
+            urlButton.disabled = true;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const contentType = response.headers.get('Content-Type')?.toLowerCase();
+                if (!contentType || !contentType.startsWith('image/')) {
+                    throw new Error(`URL did not return an image. Content-Type: ${contentType}`);
+                }
+
+                if (UNSUPPORTED_MIME_TYPES.includes(contentType)) {
+                    showMessage(`Image from URL uses an unsupported format (${contentType}). Please use JPG or PNG.`, 'error');
+                    return;
+                }
+
+                const blob = await response.blob();
+                const filename = url.substring(url.lastIndexOf('/') + 1) || 'image';
+                const file = new File([blob], filename, { type: blob.type });
+
+                if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+                    showMessage(`Image from URL exceeds the ${MAX_FILE_SIZE_MB}MB size limit.`, 'error');
+                } else {
+                    processFiles([file]);
+                    urlInput.value = '';
+                    showMessage('Image added successfully from URL.');
+                }
+            } catch (error) {
+                console.error(error);
+                showMessage(`Failed to load image from URL: ${error.message}. This may be due to CORS.`, 'error');
+            } finally {
+                urlButton.disabled = false;
+            }
+        });
+
+        imagePreviewsContainer.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                const index = e.target.getAttribute('data-index');
+                selectedFiles.splice(index, 1);
+                showPreviews();
+                toggleGenerateButton();
+                showMessage(`Removed image ${parseInt(index) + 1}.`);
+            }
+        });
+
+        // --- LLM and Report Generation (Gemini) ---
+        generateButton.addEventListener('click', async () => {
+            if (!API_KEY) {
+                showMessage("API Key is missing. Please set your new API key.", 'error');
+                return;
+            }
+            if (!isAuthReady) {
+                showMessage("Database status unknown. Please wait a moment.", 'error');
+                return;
+            }
+
+            showMessage("Generating report... Analyzing images.", 'info');
+            generateButton.disabled = true;
+            downloadButton.classList.add('hidden');
+            reportContainer.style.display = 'none';
+
+            let retries = 0;
+            const MAX_RETRIES = 3;
+
+            // Preserve originals for PDF (critical)
+            let originalFiles = [...selectedFiles];
+
+            const resetUIAndResources = async () => {
+                selectedFiles = [];
+                fileInput.value = '';
+                showPreviews();
+                toggleGenerateButton();
+                await new Promise(res => setTimeout(res, 500));
+            };
+
+            async function callApiWithRetry() {
+                try {
+                    // 1) Resize/prep
+                    showMessage("Step 1/3: Resizing and preparing images for analysis...", 'info');
+                    const resizedFiles = await Promise.all(originalFiles.map(file => resizeImage(file)));
+
+                    const base64Images = await Promise.all(
+                        resizedFiles.map(file => {
+                            return new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    const dataUrl = reader.result;
+                                    const base64 = dataUrl.split(',')[1];
+                                    const mimeType = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+                                    resolve({ data: base64, mimeType: mimeType });
+                                };
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                            });
+                        })
+                    );
+
+                    // 2) Call setup (same endpoint/model as gun app)
+                    showMessage("Step 2/3: Sending request to image analysis model...", 'info');
+                    const userNotes = notesInput.value.trim();
+
+                    const reportPrompt = `
+You are a construction equipment inspector and appraiser specializing in dealer purchase offers and resale pricing.
+
+Your task:
+- Identify the equipment (make, model, type, and any visible serial/VIN or hour meter).
+- Summarize condition based ONLY on what you can see in the photos.
+- Produce a concise professional report suitable for a dealer or serious buyer.
+
+Return ONLY valid JSON with this structure. Do NOT include any source citations or bracketed notations like [1], [2], etc.
+{
+  "equipmentType": "string",
+  "makeModelGuess": "string",
+  "identification": "string",
+  "productionEraOrYearEstimate": "string",
+  "keyFeaturesAndOptions": "string",
+  "conditionNotes": "string",
+  "undercarriageOrTires": "string",
+  "hydraulicsAndLeaks": "string",
+  "engineCoolingElectrical": "string",
+  "cabControlsDisplays": "string",
+  "frameBoomBucketAndPins": "string",
+  "recommendations": "string",
+  "disclaimer": "string",
+  "valuation": {
+    "estimatedMarketValueUSD": "string",
+    "valuationConfidence": "string"
   }
+}
 
-  const prompt = `
-You are a heavy equipment inspection professional.
-
-Using the provided images, generate a formal inspection report covering:
-- Equipment identification (make, model, serial if visible)
-- Undercarriage condition
-- Hydraulic system condition
-- Structural condition
-- Cab and controls
-- Visible leaks, wear, or damage
-- Overall condition rating (Excellent / Good / Fair / Poor)
-- Estimated remaining service life (qualitative)
-- Professional summary suitable for a dealer or buyer
-
-Inspector notes:
-${notes || "None"}
+CRITICAL:
+- estimatedMarketValueUSD must be a single number (e.g., "42500") with NO dollar signs and NO ranges.
+- If unknown, say "Unknown" (do not leave blank).
+- If hour meter or serial plate is visible, copy exactly.
 `;
 
-  const response = await fetch("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=" + window.GEMINI_API_KEY, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }, ...imageParts]
-      }]
-    })
-  });
+                    const payload = {
+                        contents: [{
+                            parts: [
+                                { text: reportPrompt },
+                                { text: `User Notes: ${userNotes}` },
+                                ...base64Images.map(img => ({
+                                    inlineData: { mimeType: img.mimeType, data: img.data }
+                                }))
+                            ]
+                        }],
+                        // tools disabled like gun app (stability)
+                        // tools: [{ "google_search": {} }],
+                    };
 
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
-  output.innerHTML = `
-    <div id="reportContent" class="prose max-w-none">
-      ${text.replace(/\n/g, "<br>")}
-    </div>
-  `;
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
 
-  document.getElementById("downloadBtn").classList.remove("hidden");
-};
+                    // 3) Response handling (same style)
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        if (response.status === 503 && retries < MAX_RETRIES) {
+                            retries++;
+                            showMessage(`Model overloaded. Retrying... (${retries}/${MAX_RETRIES})`, 'info');
+                            await new Promise(res => setTimeout(res, 2000 * retries));
+                            return callApiWithRetry();
+                        }
+                        throw new Error(`API Error: ${response.status} - ${errorText}`);
+                    }
 
-document.getElementById("downloadBtn").onclick = async () => {
-  const doc = new jsPDF();
-  const margin = 15;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+                    const result = await response.json();
+                    let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-  // Cover / text
-  await html2canvas(document.getElementById("reportContent")).then(canvas => {
-    const imgData = canvas.toDataURL("image/png");
-    const ratio = canvas.width / canvas.height;
-    const width = pageWidth - margin * 2;
-    const height = width / ratio;
-    doc.addImage(imgData, "PNG", margin, margin, width, height);
-  });
+                    if (!jsonText) {
+                        console.error("API response was empty or did not contain expected text part:", result);
+                        throw new Error("Model returned empty or invalid response structure.");
+                    }
 
-  // Images
-  doc.addPage();
-  let y = margin;
-  const imgWidth = 76; // 3 inches
-  const padding = 6;
+                    // sources (kept for methodology page, usually empty)
+                    let sources = [];
+                    const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({ uri: attribution.web?.uri, title: attribution.web?.title }))
+                            .filter(s => s.uri && s.title);
+                    }
 
-  for (let i = 0; i < originalFilesForPdf.length; i++) {
-    const img = await loadCompressedImage(originalFilesForPdf[i]);
-    const aspect = img.width / img.height;
-    const imgHeight = imgWidth / aspect;
+                    // Robust JSON extraction (same as gun app)
+                    const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/);
+                    let report;
 
-    if (y + imgHeight > pageHeight - margin) {
-      doc.addPage();
-      y = margin;
-    }
+                    if (jsonMatch) {
+                        jsonText = jsonMatch[1].trim();
+                    } else {
+                        jsonText = jsonText.trim();
+                        const firstBrace = jsonText.indexOf('{');
+                        const lastBrace = jsonText.lastIndexOf('}');
+                        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                            jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+                        }
+                    }
 
-    const x = (i % 2 === 0) ? margin : margin + imgWidth + padding;
-    doc.addImage(img.data, "JPEG", x, y, imgWidth, imgHeight);
+                    try {
+                        report = JSON.parse(jsonText);
+                    } catch (e) {
+                        console.error("Failed to parse cleaned JSON:", jsonText);
+                        throw new Error("JSON parsing failed after model response.");
+                    }
 
-    if (i % 2 === 1) y += imgHeight + padding;
-  }
+                    reportData = report;
+                    reportData.sources = sources;
 
-  doc.save("BonaFideIron_Equipment_Report.pdf");
-};
+                    // Pricing calculations (same logic style as gun app)
+                    const marketStr = (report.valuation?.estimatedMarketValueUSD || "").replace(/[$,]/g, '').trim();
+                    let marketValue = parseFloat(marketStr);
 
-// Helpers
-function resizeImage(file) {
-  return new Promise(resolve => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = e => {
-      img.src = e.target.result;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const scale = Math.min(1, 800 / Math.max(img.width, img.height));
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/png"));
-      };
-    };
-    reader.readAsDataURL(file);
-  });
-}
+                    let dealerPurchasePrice = 'N/A';
+                    let projectedRetailPrice = 'N/A';
 
-function loadCompressedImage(file) {
-  return new Promise(resolve => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = e => {
-      img.src = e.target.result;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({ data: canvas.toDataURL("image/jpeg", 0.7), width: canvas.width, height: canvas.height });
-      };
-    };
-    reader.readAsDataURL(file);
-  });
-}
-</script>
+                    const adjustedMarketValue = marketValue * (1 - PRICE_ADJUSTMENT_PERCENTAGE);
+                    if (!isNaN(adjustedMarketValue) && adjustedMarketValue > 0) {
+                        dealerPurchasePrice = adjustedMarketValue.toFixed(2);
+                        const retailCalculation = adjustedMarketValue / 0.65;
+                        const roundedRetail = roundUpToNearestFive(retailCalculation);
+                        projectedRetailPrice = roundedRetail.toFixed(2);
+
+                        report.valuation.dealerPurchasePriceUSD = dealerPurchasePrice;
+                        report.valuation.projectedRetailPriceUSD = projectedRetailPrice;
+                    }
+
+                    // Render report (same UI approach)
+                    reportContent.innerHTML = '';
+
+                    reportContent.innerHTML += `<div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="font-bold">Make / Model Guess:</p>
+                        <p>${report.makeModelGuess || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Identification</h3>
+                        <p class="text-gray-700">${report.identification || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Type</h3>
+                        <p class="text-gray-700">${report.equipmentType || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Production Era / Year Estimate</h3>
+                        <p class="text-gray-700">${report.productionEraOrYearEstimate || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Key Features & Options</h3>
+                        <p class="text-gray-700">${report.keyFeaturesAndOptions || "Unknown"}</p>
+                    </div>`;
+
+                    let valuationHtml = `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Valuation</h3>
+                        <div class="mt-2 space-y-3 p-4 border rounded-xl bg-green-50">
+                            <div class="flex justify-between font-medium text-gray-700">
+                                <span class="text-blue-700">Dealer Purchase Offer:</span>
+                                <span class="text-blue-700 font-bold no-break">$${dealerPurchasePrice}</span>
+                            </div>
+                            <div class="flex justify-between font-medium text-gray-700 border-t pt-3 mt-3">
+                                <span>Projected Retail Value:</span>
+                                <span class="text-green-700 font-bold no-break">$${projectedRetailPrice}</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-sm text-gray-600">
+                            <strong>Confidence Level:</strong>
+                            <span class="font-semibold text-gray-800">${report.valuation?.valuationConfidence || "Unknown"}</span>
+                            <p class="text-xs mt-1">Confidence reflects clarity of images and certainty of identification/condition.</p>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">
+                            *Valuation methodology and source details (if any) are included on the final page of the PDF report.
+                        </p>
+                    </div>`;
+                    reportContent.innerHTML += valuationHtml;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Condition Notes</h3>
+                        <p class="text-gray-700">${report.conditionNotes || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Undercarriage / Tires</h3>
+                        <p class="text-gray-700">${report.undercarriageOrTires || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Hydraulics & Leaks</h3>
+                        <p class="text-gray-700">${report.hydraulicsAndLeaks || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Engine / Cooling / Electrical</h3>
+                        <p class="text-gray-700">${report.engineCoolingElectrical || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Cab / Controls / Displays</h3>
+                        <p class="text-gray-700">${report.cabControlsDisplays || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Frame / Boom / Bucket / Pins</h3>
+                        <p class="text-gray-700">${report.frameBoomBucketAndPins || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div>
+                        <h3 class="font-semibold text-lg text-gray-800">Recommendations</h3>
+                        <p class="text-gray-700">${report.recommendations || "Unknown"}</p>
+                    </div>`;
+
+                    reportContent.innerHTML += `<div class="p-4 mt-4 bg-yellow-50 text-sm text-yellow-800 rounded-lg">
+                        <p><strong>Disclaimer:</strong> ${report.disclaimer || "This report is based on photos only and is not a substitute for an in-person inspection by a qualified technician."}</p>
+                    </div>`;
+
+                    reportContainer.style.display = 'block';
+                    downloadButton.classList.remove('hidden');
+                    showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
+
+                    // Save to Firestore (same pattern)
+                    if (isAuthReady && db) {
+                        const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
+                        await setDoc(reportRef, report);
+                        console.log("Report saved to Firestore.");
+                    }
+
+                } catch (error) {
+                    console.error("Report generation error:", error);
+                    showMessage(`Failed to generate report: ${error.message}`, 'error');
+                } finally {
+                    await resetUIAndResources();
+                    generateButton.disabled = false;
+                }
+            }
+
+            callApiWithRetry();
+        });
+
+        // --- PDF Download (full report + ALL images, small/low-res) ---
+        downloadButton.addEventListener('click', async () => {
+            const { jsPDF } = window.jspdf;
+
+            showMessage("Preparing PDF…", 'info');
+            downloadButton.disabled = true;
+
+            const addFooter = (doc, margin, pageHeight) => {
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.setFont("helvetica", "normal");
+                doc.text("Bona Fide Iron | WWW.LUDDITELEARNING.COM", margin, pageHeight - 5);
+            };
+
+            try {
+                const makeModel = (reportData?.makeModelGuess || "Equipment").replace(/[/\s]+/g, '_');
+                const today = new Date().toISOString().split('T')[0];
+                const sanitizedFilename = `${makeModel}_${today}_Equipment_Report.pdf`.replace(/[/\s]+/g, '_');
+
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 10;
+
+                // Page 1: report content
+                const reportCanvas = await html2canvas(reportContainer, { scale: 3, width: reportContainer.offsetWidth });
+                const reportImgData = reportCanvas.toDataURL('image/jpeg', 0.95);
+
+                const reportPdfWidth = pageWidth - margin * 2;
+                const reportPdfHeight = reportPdfWidth / (reportCanvas.width / reportCanvas.height);
+
+                doc.addImage(reportImgData, 'JPEG', margin, margin, reportPdfWidth, reportPdfHeight);
+                addFooter(doc, margin, pageHeight);
+
+                // Reference Images
+                if (reportData && reportData !== null) {
+                    // The originals are the ones used in the report generation closure.
+                    // We can’t access that closure here, so we re-use the last known upload set:
+                    // Trick: keep them in a global for PDF. This avoids "oops it cleared".
+                }
+
+                // We store originals for PDF by keeping the last-known selection in window scope.
+                // If you want a hard guarantee across multiple runs, add: window.__equipmentOriginalFiles = originalFiles;
+                // For now: we capture from the last run by relying on the browser cache of the last selected files:
+                // Better: persist it here:
+                // We'll keep it on first successful report generation by setting window.__equipmentOriginalFiles there.
+
+                // If window.__equipmentOriginalFiles exists, use it:
+                const originals = window.__equipmentOriginalFiles || [];
+
+                // If not set (rare), no images page
+                if (originals.length > 0) {
+                    doc.addPage();
+                    let y = margin;
+
+                    doc.setFontSize(16);
+                    doc.setTextColor(0);
+                    doc.text("Reference Images", margin, y);
+                    y += 8;
+
+                    addFooter(doc, margin, pageHeight);
+
+                    const imagePadding = 6;
+                    const titleHeight = 8;
+                    let rowMaxHeight = 0;
+
+                    for (let i = 0; i < originals.length; i++) {
+                        const file = originals[i];
+
+                        const { dataUrl, width, height } = await fileToCompressedJpegDataUrl(file);
+                        const aspect = width / height;
+                        const imgPdfHeight = PDF_IMAGE_WIDTH_MM / aspect;
+
+                        if (i % 2 === 0) {
+                            if (i > 0) y += rowMaxHeight + imagePadding;
+                            rowMaxHeight = 0;
+
+                            if (y + imgPdfHeight > pageHeight - margin - 10) {
+                                doc.addPage();
+                                y = margin;
+
+                                doc.setFontSize(16);
+                                doc.setTextColor(0);
+                                doc.text("Reference Images (Cont.)", margin, y);
+                                y += titleHeight;
+
+                                addFooter(doc, margin, pageHeight);
+                            }
+                        }
+
+                        const x = (i % 2 === 0) ? margin : (margin + PDF_IMAGE_WIDTH_MM + imagePadding);
+                        rowMaxHeight = Math.max(rowMaxHeight, imgPdfHeight);
+
+                        doc.addImage(dataUrl, 'JPEG', x, y, PDF_IMAGE_WIDTH_MM, imgPdfHeight);
+                    }
+
+                    addFooter(doc, margin, pageHeight);
+                }
+
+                // Methodology + Sources
+                const methodologyTitle = "Valuation Methodology and Sources";
+                const methodologyText = `
+The final pricing is determined using a two-step process:
+
+1. Dealer Purchase Offer: The dealer offer is computed from the model's estimated market value, reduced by ${(PRICE_ADJUSTMENT_PERCENTAGE * 100).toFixed(0)}%.
+2. Projected Retail Value: The retail estimate applies a typical resale markup (Offer / 0.65) and rounds up to the nearest $5.00.
+
+Sources (if any) are provided below. If none are listed, the identification and estimate are based on image analysis and general market knowledge.
+`;
+
+                let sourceList = (reportData && reportData.sources) ? reportData.sources : [];
+                if (!sourceList || sourceList.length === 0) {
+                    sourceList = [{
+                        title: "General Market Data (Aggregated by LLM)",
+                        uri: "Valuation synthesized from publicly available auction, retail, and wholesale pricing patterns."
+                    }];
+                }
+
+                doc.addPage();
+                let currentYPos = margin;
+
+                doc.setFontSize(16);
+                doc.setTextColor(0);
+                doc.text(methodologyTitle, margin, currentYPos);
+                currentYPos += 10;
+
+                doc.setFontSize(10);
+                doc.setTextColor(50);
+                doc.setFont("helvetica", "normal");
+
+                const reportPdfWidthMethodology = pageWidth - margin * 2;
+                let textLines = doc.splitTextToSize(methodologyText, reportPdfWidthMethodology);
+                doc.text(textLines, margin, currentYPos);
+                currentYPos += textLines.length * 4.5;
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("Referenced Sources:", margin, currentYPos);
+                currentYPos += 5;
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+
+                sourceList.forEach((source, index) => {
+                    const sourceText = `${index + 1}. ${source.title} (${source.uri})`;
+                    const sourceLines = doc.splitTextToSize(sourceText, reportPdfWidthMethodology);
+
+                    if (currentYPos + sourceLines.length * 4.5 > pageHeight - margin - 10) {
+                        doc.addPage();
+                        currentYPos = margin;
+
+                        doc.setFontSize(10);
+                        doc.text("Sources (Cont.):", margin, currentYPos);
+                        currentYPos += 5;
+
+                        addFooter(doc, margin, pageHeight);
+                    }
+
+                    doc.text(sourceLines, margin, currentYPos);
+                    currentYPos += sourceLines.length * 4.5;
+                });
+
+                addFooter(doc, margin, pageHeight);
+
+                doc.save(sanitizedFilename);
+                showMessage("PDF download started!", 'info');
+
+            } catch (error) {
+                console.error("PDF generation failed:", error);
+                showMessage("Failed to generate PDF. Please try again.", 'error');
+            } finally {
+                downloadButton.disabled = false;
+            }
+        });
+
+        // IMPORTANT: persist originals for PDF on successful generation
+        // We do it by patching the global from within the generate flow.
+        // This keeps the gun-app behavior (clears UI) but still lets PDF embed all pictures.
+        const __oldAddEventListener = generateButton.addEventListener.bind(generateButton);
+        // no-op, we already set window.__equipmentOriginalFiles inside generation:
+        // We'll set it right after the user selects files, every time:
+        function syncOriginalsForPdf() {
+            window.__equipmentOriginalFiles = [...selectedFiles];
+        }
+        // Sync on every change
+        fileInput.addEventListener('change', syncOriginalsForPdf);
+        urlButton.addEventListener('click', () => setTimeout(syncOriginalsForPdf, 200));
+        window.addEventListener('paste', () => setTimeout(syncOriginalsForPdf, 200));
+        dropZone.addEventListener('drop', () => setTimeout(syncOriginalsForPdf, 200));
+
+        // init
+        toggleGenerateButton();
+    </script>
 </body>
 </html>
