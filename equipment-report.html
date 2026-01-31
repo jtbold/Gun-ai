@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bona Fide Iron – Equipment Inspection Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- html2canvas + jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      background: #f3f4f6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+  </style>
+</head>
+
+<body class="p-6">
+  <!-- Header -->
+  <div class="max-w-5xl mx-auto bg-white shadow rounded-lg p-6">
+    <div class="flex items-center gap-4 mb-6">
+      <img src="Screenshot 2026-01-31 084018.jpg" alt="Bona Fide Iron" class="h-12" />
+      <h1 class="text-2xl font-semibold">Construction Equipment Inspection Report</h1>
+    </div>
+
+    <!-- Upload -->
+    <div class="mb-4">
+      <label class="block font-medium mb-1">Upload up to 20 images</label>
+      <input id="imageInput" type="file" accept="image/*" multiple class="w-full" />
+    </div>
+
+    <!-- Notes -->
+    <div class="mb-4">
+      <label class="block font-medium mb-1">Inspector Notes (optional)</label>
+      <textarea id="notes" rows="4" class="w-full border rounded p-2"></textarea>
+    </div>
+
+    <!-- Analyze -->
+    <button
+      id="analyzeBtn"
+      class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
+    >
+      Generate Professional Report
+    </button>
+
+    <!-- Output -->
+    <div id="output" class="mt-6 space-y-4"></div>
+
+    <!-- PDF -->
+    <button
+      id="downloadBtn"
+      class="hidden bg-green-700 text-white px-4 py-2 rounded mt-6"
+    >
+      Download PDF
+    </button>
+  </div>
+
+<script>
+const { jsPDF } = window.jspdf;
+let originalFilesForPdf = [];
+
+document.getElementById("analyzeBtn").onclick = async () => {
+  const files = Array.from(document.getElementById("imageInput").files).slice(0, 20);
+  if (files.length === 0) return alert("Upload at least one image.");
+
+  originalFilesForPdf = files;
+
+  const notes = document.getElementById("notes").value;
+  const output = document.getElementById("output");
+  output.innerHTML = "<p class='text-gray-600'>Analyzing equipment…</p>";
+
+  const imageParts = [];
+
+  for (const file of files) {
+    const resized = await resizeImage(file);
+    imageParts.push({
+      inlineData: {
+        mimeType: "image/png",
+        data: resized.split(",")[1]
+      }
+    });
+  }
+
+  const prompt = `
+You are a heavy equipment inspection professional.
+
+Using the provided images, generate a formal inspection report covering:
+- Equipment identification (make, model, serial if visible)
+- Undercarriage condition
+- Hydraulic system condition
+- Structural condition
+- Cab and controls
+- Visible leaks, wear, or damage
+- Overall condition rating (Excellent / Good / Fair / Poor)
+- Estimated remaining service life (qualitative)
+- Professional summary suitable for a dealer or buyer
+
+Inspector notes:
+${notes || "None"}
+`;
+
+  const response = await fetch("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=" + window.GEMINI_API_KEY, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: prompt }, ...imageParts]
+      }]
+    })
+  });
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+
+  output.innerHTML = `
+    <div id="reportContent" class="prose max-w-none">
+      ${text.replace(/\n/g, "<br>")}
+    </div>
+  `;
+
+  document.getElementById("downloadBtn").classList.remove("hidden");
+};
+
+document.getElementById("downloadBtn").onclick = async () => {
+  const doc = new jsPDF();
+  const margin = 15;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Cover / text
+  await html2canvas(document.getElementById("reportContent")).then(canvas => {
+    const imgData = canvas.toDataURL("image/png");
+    const ratio = canvas.width / canvas.height;
+    const width = pageWidth - margin * 2;
+    const height = width / ratio;
+    doc.addImage(imgData, "PNG", margin, margin, width, height);
+  });
+
+  // Images
+  doc.addPage();
+  let y = margin;
+  const imgWidth = 76; // 3 inches
+  const padding = 6;
+
+  for (let i = 0; i < originalFilesForPdf.length; i++) {
+    const img = await loadCompressedImage(originalFilesForPdf[i]);
+    const aspect = img.width / img.height;
+    const imgHeight = imgWidth / aspect;
+
+    if (y + imgHeight > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+
+    const x = (i % 2 === 0) ? margin : margin + imgWidth + padding;
+    doc.addImage(img.data, "JPEG", x, y, imgWidth, imgHeight);
+
+    if (i % 2 === 1) y += imgHeight + padding;
+  }
+
+  doc.save("BonaFideIron_Equipment_Report.pdf");
+};
+
+// Helpers
+function resizeImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e => {
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/png"));
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadCompressedImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e => {
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve({ data: canvas.toDataURL("image/jpeg", 0.7), width: canvas.width, height: canvas.height });
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+}
+</script>
+</body>
+</html>
