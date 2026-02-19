@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Scrape Test (Herc Rentals)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-gray-100 p-6">
+  <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow p-6 space-y-6">
+    <header class="space-y-2">
+      <h1 class="text-2xl font-extrabold text-gray-900">Herc Rentals Scrape Test</h1>
+      <p class="text-gray-600">
+        This page tests whether your Render backend endpoint can fetch and extract listing data from Herc.
+      </p>
+      <p class="text-sm text-gray-500">
+        Expected behavior:
+        <br>• Direct browser scrape: usually fails (CORS / JS-rendered)
+        <br>• Server scrape (/api/herc): should succeed once backend is installed
+      </p>
+    </header>
+
+    <div class="space-y-2">
+      <label class="text-sm font-medium text-gray-700">Listing URL</label>
+      <input id="url" class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+             value="https://used.hercrentals.com/equipment/detail/085275423" />
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button id="test-server" class="px-5 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
+          Test SERVER scrape (/api/herc)
+        </button>
+        <button id="test-direct" class="px-5 py-3 rounded-xl bg-gray-800 text-white font-semibold hover:bg-gray-900">
+          Test DIRECT browser fetch (expected fail)
+        </button>
+        <button id="clear" class="px-5 py-3 rounded-xl bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300">
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <div class="text-sm font-medium text-gray-700">Status</div>
+      <div id="status" class="text-sm text-gray-600">Ready.</div>
+    </div>
+
+    <div class="space-y-2">
+      <div class="text-sm font-medium text-gray-700">Result</div>
+      <pre id="out" class="w-full overflow-auto text-xs bg-gray-50 border rounded-xl p-4 h-80"></pre>
+    </div>
+
+    <div class="text-xs text-gray-500">
+      Tip: You can also test by directly visiting:
+      <span class="font-mono">/api/herc?url=...</span> in the browser once the backend exists.
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const outEl = $("out");
+
+    function setStatus(msg, type = "info") {
+      statusEl.className =
+        "text-sm " +
+        (type === "error" ? "text-red-600" : type === "ok" ? "text-green-700" : "text-gray-600");
+      statusEl.textContent = msg;
+    }
+
+    function pretty(obj) {
+      try { return JSON.stringify(obj, null, 2); }
+      catch { return String(obj); }
+    }
+
+    async function testServer() {
+      const url = $("url").value.trim();
+      if (!url) return setStatus("Please paste a listing URL.", "error");
+
+      setStatus("Calling your server endpoint…", "info");
+      outEl.textContent = "";
+
+      try {
+        // Call YOUR domain. This avoids CORS issues.
+        const endpoint = `/api/herc?url=${encodeURIComponent(url)}`;
+        const res = await fetch(endpoint, { method: "GET" });
+
+        const contentType = res.headers.get("content-type") || "";
+        let body;
+
+        if (contentType.includes("application/json")) {
+          body = await res.json();
+        } else {
+          body = await res.text();
+        }
+
+        if (!res.ok) {
+          setStatus(`Server returned ${res.status}. See output.`, "error");
+          outEl.textContent = typeof body === "string" ? body : pretty(body);
+          return;
+        }
+
+        setStatus("Server scrape succeeded ✅", "ok");
+        outEl.textContent = pretty(body);
+
+      } catch (err) {
+        setStatus(`Server scrape failed: ${err.message}`, "error");
+        outEl.textContent = String(err);
+      }
+    }
+
+    async function testDirect() {
+      const url = $("url").value.trim();
+      if (!url) return setStatus("Please paste a listing URL.", "error");
+
+      setStatus("Trying direct browser fetch (this usually fails)…", "info");
+      outEl.textContent = "";
+
+      try {
+        const res = await fetch(url, { method: "GET" }); // usually blocked by CORS
+        const text = await res.text();
+        setStatus(`Direct fetch returned ${res.status}. (If you see HTML, Herc allowed it.)`, "ok");
+        outEl.textContent = text.slice(0, 20000); // show first chunk
+
+      } catch (err) {
+        setStatus("Direct fetch failed (expected). This is why we need the backend.", "error");
+        outEl.textContent = String(err);
+      }
+    }
+
+    $("test-server").addEventListener("click", testServer);
+    $("test-direct").addEventListener("click", testDirect);
+    $("clear").addEventListener("click", () => {
+      outEl.textContent = "";
+      setStatus("Cleared.", "info");
+    });
+  </script>
+</body>
+</html>
