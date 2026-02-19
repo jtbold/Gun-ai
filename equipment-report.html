@@ -21,7 +21,6 @@
   <div class="container bg-white rounded-3xl shadow-xl p-8 space-y-8">
     <header class="text-center space-y-3">
       <div class="flex items-center justify-center gap-3">
-        <!-- logo file should live next to index.html in your repo -->
         <img id="bfi-logo" src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-14 w-auto rounded" />
         <div class="text-left">
           <div class="text-xl font-extrabold text-gray-900">Bona Fide Iron</div>
@@ -46,14 +45,24 @@
       </button>
     </div>
 
-    <!-- Optional listing details (helps the rules engine) -->
+    <!-- Listing link + Optional listing details -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="space-y-2 md:col-span-2">
+        <label class="text-sm font-medium text-gray-700">Listing URL (optional, recommended)</label>
+        <input id="listing-url" type="text"
+               placeholder="Paste listing link (e.g., Herc, MachineryTrader, Ritchie Bros, etc.)"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">
+          If you paste a link, the app will try to extract price/hours/specs via Google grounding. If not reliably available, it will leave fields blank and flag review.
+        </p>
+      </div>
+
       <div class="space-y-2">
         <label class="text-sm font-medium text-gray-700">Seller Asking Price (USD) — optional</label>
         <input id="asking-price" type="number" min="0" step="100"
                placeholder="e.g., 107000"
                class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-        <p class="text-xs text-gray-400">If blank, the app will still value it, but deal scoring will be limited.</p>
+        <p class="text-xs text-gray-400">If blank, we’ll try to pull asking price from the listing URL.</p>
       </div>
 
       <div class="space-y-2">
@@ -61,7 +70,7 @@
         <input id="hours" type="number" min="0" step="10"
                placeholder="e.g., 8200"
                class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-        <p class="text-xs text-gray-400">If unknown, we skip hours depreciation and flag “manual review”.</p>
+        <p class="text-xs text-gray-400">If blank, we’ll try to pull hours from the listing URL.</p>
       </div>
 
       <div class="space-y-2">
@@ -83,7 +92,7 @@
         <input id="distance" type="number" min="0" step="10"
                placeholder="e.g., 250"
                class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-        <p class="text-xs text-gray-400">Used for transport adjustment.</p>
+        <p class="text-xs text-gray-400">Used for transport adjustment buckets.</p>
       </div>
 
       <div class="space-y-2">
@@ -158,51 +167,43 @@
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Global variables provided by the environment (Canvas / hosted)
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
     // ***************************************************************
-    // CRITICAL SECURITY: The API key is set to an empty string.
-    // This line MUST be replaced by the build script (render_build.sh).
+    // CRITICAL SECURITY: This MUST be injected by your Render build script.
     const API_KEY = "";
     // ***************************************************************
 
     // -------------------------
     // BFI RULE ENGINE CONSTANTS
     // -------------------------
-
-    // Regional multipliers (Colorado base = 1.00) :contentReference[oaicite:7]{index=7}
     const REGION_MULTIPLIERS = {
       "Mountain West": 1.00,
-      "Texas/Oklahoma": 1.10,      // choose midpoint of +8% to +12%
-      "California": 1.08,          // choose midpoint of +5% to +10%
-      "Pacific Northwest": 1.04,   // choose midpoint of +3% to +5%
-      "Midwest": 0.94,             // choose midpoint of -5% to -8%
-      "Southeast": 1.02,           // choose midpoint of 0% to +3%
-      "Northeast": 0.985           // choose midpoint of -3% to 0%
+      "Texas/Oklahoma": 1.10,
+      "California": 1.08,
+      "Pacific Northwest": 1.04,
+      "Midwest": 0.94,
+      "Southeast": 1.02,
+      "Northeast": 0.985
     };
 
-    // Distance-based adjustment (uses the “Valuation Adjustment” numbers) :contentReference[oaicite:8]{index=8}
     function distanceAdjustmentUSD(distanceMiles) {
       if (distanceMiles === null || distanceMiles === undefined || isNaN(distanceMiles)) return null;
       if (distanceMiles <= 100) return -650;
       if (distanceMiles <= 300) return -1500;
       if (distanceMiles <= 500) return -2750;
       if (distanceMiles <= 800) return -4250;
-      return null; // >800 -> manual review per rules
+      return null;
     }
 
-    // Seasonal adjustments :contentReference[oaicite:9]{index=9}
     function currentSeasonAdjustmentPct() {
-      const now = new Date();
-      const m = now.getMonth() + 1;
-      // Spring: Mar-May, Summer: Jun-Aug, Fall: Sep-Nov, Winter: Dec-Feb
-      if (m >= 3 && m <= 5) return 0.065;     // midpoint of +5% to +8%
-      if (m >= 6 && m <= 8) return 0.04;      // midpoint of +3% to +5%
-      if (m >= 9 && m <= 11) return 0.0;      // baseline
-      return -0.075;                          // midpoint of -5% to -10%
+      const m = (new Date()).getMonth() + 1;
+      if (m >= 3 && m <= 5) return 0.065;
+      if (m >= 6 && m <= 8) return 0.04;
+      if (m >= 9 && m <= 11) return 0.0;
+      return -0.075;
     }
 
     function seasonName() {
@@ -213,18 +214,15 @@
       return "Winter";
     }
 
-    // Inventory saturation penalties :contentReference[oaicite:10]{index=10}
     function saturationPenaltyPct(inventoryCount) {
       if (inventoryCount === null || inventoryCount === undefined || isNaN(inventoryCount)) return null;
       if (inventoryCount <= 2) return 0.0;
       if (inventoryCount <= 4) return -0.05;
       if (inventoryCount <= 6) return -0.10;
-      return -0.20; // >6 => -20% or decline (we apply penalty and flag)
+      return -0.20;
     }
 
-    // Title/documentation rules :contentReference[oaicite:11]{index=11}
     function titleRule(titleStatus) {
-      // returns { decision: "OK"|"DECLINE"|"FLAG", adjustmentUSD, adjustmentPct, notes[] }
       const out = { decision:"OK", adjustmentUSD:0, adjustmentPct:0, notes:[] };
       if (!titleStatus) return out;
 
@@ -235,13 +233,13 @@
       }
       if (titleStatus === "Rebuilt") {
         out.decision = "FLAG";
-        out.adjustmentPct = -0.25; // “-25% minimum or decline”
+        out.adjustmentPct = -0.25;
         out.notes.push("Rebuilt title: -25% minimum adjustment or decline.");
         return out;
       }
       if (titleStatus === "OutOfState") {
         out.decision = "OK";
-        out.adjustmentUSD = -500; // “Add $500 for title transfer costs”
+        out.adjustmentUSD = -500;
         out.notes.push("Out-of-state title: -$500 transfer cost.");
         return out;
       }
@@ -253,18 +251,16 @@
       return out;
     }
 
-    // Hours depreciation tables :contentReference[oaicite:12]{index=12}
     const LIFESPAN_BY_TYPE = {
-      "Excavator (standard)": { lifespan: 10000, highThreshold: 8000, ratePer500: -0.02 },
-      "Excavator (heavy duty)": { lifespan: 15000, highThreshold: 12000, ratePer500: -0.02 },
-      "Dozer": { lifespan: 12000, highThreshold: 10000, ratePer500: -0.025 },
-      "Wheel loader": { lifespan: 10000, highThreshold: 8000, ratePer500: -0.02 },
-      "Track loader": { lifespan: 8000, highThreshold: 6500, ratePer500: -0.025 },
-      "Backhoe": { lifespan: 6000, highThreshold: 5000, ratePer500: -0.03 },
-      "Skid steer": { lifespan: 5000, highThreshold: 4000, ratePer500: -0.03 }
+      "Excavator (standard)": { lifespan: 10000 },
+      "Excavator (heavy duty)": { lifespan: 15000 },
+      "Dozer": { lifespan: 12000 },
+      "Wheel loader": { lifespan: 10000 },
+      "Track loader": { lifespan: 8000 },
+      "Backhoe": { lifespan: 6000 },
+      "Skid steer": { lifespan: 5000 }
     };
 
-    // Hour-based penalty logic (percent-of-life) :contentReference[oaicite:13]{index=13}
     function hoursPenaltyPct(hours, lifespan) {
       if (hours === null || hours === undefined || isNaN(hours) || !lifespan) return null;
       const pct = hours / lifespan;
@@ -275,26 +271,21 @@
       return -0.40;
     }
 
-    // Cross-validation safety margin when only 1–2 sources are available :contentReference[oaicite:14]{index=14}
     function limitedDataSafetyMarginPct(sourcesUsedCount) {
       if (sourcesUsedCount === null || sourcesUsedCount === undefined || isNaN(sourcesUsedCount)) return null;
       if (sourcesUsedCount <= 2) return -0.15;
       return 0.0;
     }
 
-    // Priority scoring weights :contentReference[oaicite:15]{index=15}
     function priorityScore({ profitMarginPct, absoluteProfitUSD, confidencePct, marketVelocityScore, daysOnMarket }) {
-      // Profit margin points: 20%=>40, 30%=>60, 40%=>80, 50%+=>100
       function marginPoints(p) {
         if (p === null || p === undefined || isNaN(p)) return 0;
         if (p >= 0.50) return 100;
         if (p >= 0.40) return 80;
         if (p >= 0.30) return 60;
         if (p >= 0.20) return 40;
-        return Math.max(0, Math.round(p * 200)); // gentle scaling below 20%
+        return Math.max(0, Math.round(p * 200));
       }
-
-      // Absolute profit points: 10k=>50, 20k=>75, 30k+=>100
       function profitPoints(p) {
         if (p === null || p === undefined || isNaN(p)) return 0;
         if (p >= 30000) return 100;
@@ -302,13 +293,10 @@
         if (p >= 10000) return 50;
         return Math.max(0, Math.round((p / 10000) * 50));
       }
-
-      // Days on market points: >30 => 100, <7 => 25 (simple ramp)
       function domPoints(d) {
         if (d === null || d === undefined || isNaN(d)) return 50;
         if (d < 7) return 25;
         if (d > 30) return 100;
-        // linear 7..30 => 40..95
         return Math.round(40 + (d - 7) * (55 / 23));
       }
 
@@ -368,7 +356,7 @@
       } catch (e) {
         console.error("Firebase init error:", e);
         db = null;
-        isAuthReady = true; // allow app to run even without db
+        isAuthReady = true;
         document.getElementById('status-message').textContent = "Database unavailable (local mode).";
       }
     }
@@ -387,6 +375,7 @@
     const reportContent = document.getElementById('report-content');
     const reportMeta = document.getElementById('report-meta');
 
+    const listingUrlEl = document.getElementById('listing-url');
     const askingPriceEl = document.getElementById('asking-price');
     const hoursEl = document.getElementById('hours');
     const regionEl = document.getElementById('region');
@@ -399,9 +388,7 @@
     const MAX_FILES = 20;
     const MAX_FILE_SIZE_MB = 6;
 
-    // Image processing:
-    // - For model: keep analysis stable (max 1024 side, jpeg)
-    // - For PDF: make smaller (target width ~3 inches = 76mm on A4), lower quality
+    // Image processing for stability
     const MAX_IMAGE_SIDE_PX_MODEL = 1024;
     const UNSUPPORTED_MIME_TYPES = ['image/avif', 'image/svg+xml'];
 
@@ -460,7 +447,6 @@
       if (newFiles.length) showMessage(`Added ${newFiles.length} image(s). Total: ${selectedFiles.length}/${MAX_FILES}`);
     }
 
-    // Resize for model stability
     function resizeForModel(file) {
       return new Promise(resolve => {
         const img = new Image();
@@ -482,7 +468,13 @@
       });
     }
 
-    // Events
+    // Try to find a URL in notes if listing URL field is empty
+    function extractUrlFromText(text) {
+      if (!text) return null;
+      const m = text.match(/https?:\/\/[^\s)]+/i);
+      return m ? m[0] : null;
+    }
+
     uploadButton.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value=''; });
 
@@ -509,158 +501,118 @@
       }
     });
 
-    // Helpers
     const fmtUSD = (n) => {
       if (n === null || n === undefined || isNaN(n)) return "N/A";
       return new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 }).format(n);
     };
-    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
     const safeNum = (v) => {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
 
     function computeBFIValuation(inputs) {
-      // inputs includes: baseMarketValueUSD, sourcesUsedCount, sourcesSpreadPct, conditionAdjUSD, conditionTier, conditionConfidencePct,
-      // equipmentTypeBucket, hours, region, distanceMiles, inventoryCount, daysOnMarket, titleStatus, reconCostUSD, riskAdjUSD, marketVelocityScore, aiConfidencePct
       const notes = [];
       const flags = [];
-      let decision = "OK"; // OK / FLAG / DECLINE
+      let decision = "OK";
 
-      // 0) Title rules first (hard stops) :contentReference[oaicite:16]{index=16}
       const t = titleRule(inputs.titleStatus);
       if (t.decision === "DECLINE") {
-        return {
-          decision: "DECLINE",
-          notes: [...t.notes],
-          flags: ["DECLINE"],
-          breakdown: {},
-          deal: {}
-        };
+        return { decision:"DECLINE", notes:[...t.notes], flags:["DECLINE"], breakdown:{}, deal:{} };
       }
       if (t.decision === "FLAG") { decision = "FLAG"; flags.push("MANUAL_REVIEW"); notes.push(...t.notes); }
-      let titleAdjUSD = t.adjustmentUSD || 0;
-      let titleAdjPct = t.adjustmentPct || 0;
+      const titleAdjUSD = t.adjustmentUSD || 0;
+      const titleAdjPct = t.adjustmentPct || 0;
 
-      // 1) Base Market Value + cross-validation safety margin :contentReference[oaicite:17]{index=17}
       let base = inputs.baseMarketValueUSD;
       if (base === null) {
         decision = "FLAG";
         flags.push("MANUAL_REVIEW");
-        notes.push("No comparable data found: unable to value automatically.");
-        return {
-          decision: "FLAG",
-          notes,
-          flags,
-          breakdown: { baseMarketValueUSD: null },
-          deal: {}
-        };
+        notes.push("No comparable market data found: unable to value automatically.");
+        return { decision, notes, flags, breakdown:{ baseMarketValueUSD:null }, deal:{} };
       }
 
       const spread = inputs.sourcesSpreadPct;
       const srcCount = inputs.sourcesUsedCount;
 
       if (spread !== null) {
-        if (spread <= 10) {
-          // high confidence path: use as-is
-        } else if (spread <= 20) {
-          decision = "FLAG";
-          flags.push("MANUAL_REVIEW");
-          notes.push("Sources vary 10–20%: flagged for review.");
-        } else {
-          decision = "FLAG";
-          flags.push("MANUAL_REVIEW");
-          notes.push("Sources vary >20%: use conservative estimate and require manual review.");
-          // conservative estimate: shave 10% off base
+        if (spread > 10 && spread <= 20) {
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary 10–20%: manual review recommended.");
+        } else if (spread > 20) {
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary >20%: conservative adjustment applied; manual review required.");
           base = base * 0.90;
         }
       }
 
       const safetyMarginPct = limitedDataSafetyMarginPct(srcCount);
-      let safetyAdj = 0;
+      let safetyAdjUSD = 0;
       if (safetyMarginPct !== null && safetyMarginPct < 0) {
-        safetyAdj = base * safetyMarginPct;
-        decision = "FLAG";
-        flags.push("MANUAL_REVIEW");
-        notes.push("Limited data (1–2 sources): applied 15% safety margin and flagged for review.");
+        safetyAdjUSD = base * safetyMarginPct;
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Limited data (1–2 sources): applied 15% safety margin; manual review recommended.");
       }
 
-      // 2) Condition assessment adjustment (USD) :contentReference[oaicite:18]{index=18}
       let conditionAdjUSD = inputs.conditionAdjustmentsUSD ?? null;
       if (conditionAdjUSD === null) {
-        decision = "FLAG";
-        flags.push("MANUAL_REVIEW");
-        notes.push("Condition adjustment missing: flagged for manual review.");
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Condition adjustment missing: manual review recommended.");
         conditionAdjUSD = 0;
       }
 
-      // 3) Hours depreciation :contentReference[oaicite:19]{index=19}
       let hoursAdjPct = null;
       let hoursAdjUSD = 0;
       if (inputs.hours !== null && inputs.equipmentTypeBucket && LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket]) {
         const life = LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket].lifespan;
         hoursAdjPct = hoursPenaltyPct(inputs.hours, life);
-        hoursAdjUSD = (base + safetyAdj + conditionAdjUSD) * (hoursAdjPct || 0);
+        hoursAdjUSD = (base + safetyAdjUSD + conditionAdjUSD) * (hoursAdjPct || 0);
       } else {
-        // If hours missing, rules say flag for review when data unclear
-        decision = "FLAG";
-        flags.push("MANUAL_REVIEW");
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
         notes.push("Hours and/or equipment type not available: hours depreciation skipped; manual review recommended.");
       }
 
-      // 4) Geographic multiplier :contentReference[oaicite:20]{index=20}
       const region = inputs.region || "Mountain West";
       const regionMult = REGION_MULTIPLIERS[region] ?? 1.00;
-      const geoAdjUSD = (base + safetyAdj) * (regionMult - 1.0);
+      const geoAdjUSD = (base + safetyAdjUSD) * (regionMult - 1.0);
 
-      // 5) Market factors: seasonal + saturation :contentReference[oaicite:21]{index=21}
-      const seasonPct = currentSeasonAdjustmentPct();
-      const seasonAdjUSD = (base + safetyAdj) * seasonPct;
+      const seasonAdjUSD = (base + safetyAdjUSD) * currentSeasonAdjustmentPct();
 
       const satPct = saturationPenaltyPct(inputs.inventoryCount);
       let satAdjUSD = 0;
       if (satPct !== null) {
-        satAdjUSD = (base + safetyAdj) * satPct;
+        satAdjUSD = (base + safetyAdjUSD) * satPct;
         if (inputs.inventoryCount > 6) {
-          decision = "FLAG";
-          flags.push("MANUAL_REVIEW");
-          notes.push("Inventory >6: critical saturation risk; manual review recommended.");
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Inventory >6: saturation risk; manual review recommended.");
         }
       } else {
         notes.push("Inventory count missing: saturation rule skipped.");
       }
 
-      // 6) Distance-based transport adjustment :contentReference[oaicite:22]{index=22}
       let distAdjUSD = 0;
       const distAdj = distanceAdjustmentUSD(inputs.distanceMiles);
       if (distAdj === null && inputs.distanceMiles !== null) {
-        decision = "FLAG";
-        flags.push("MANUAL_REVIEW");
-        notes.push("Distance >800 miles: flagged for manual review (transport likely unprofitable).");
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Distance >800 miles: manual review recommended (transport risk).");
       } else if (distAdj !== null) {
         distAdjUSD = distAdj;
       } else {
         notes.push("Distance missing: transport adjustment skipped.");
       }
 
-      // 7) Risk adjustments (USD) :contentReference[oaicite:23]{index=23}
-      let riskAdjUSD = inputs.riskAdjustmentsUSD ?? 0;
+      const riskAdjUSD = inputs.riskAdjustmentsUSD ?? 0;
       if (inputs.riskFlags?.includes("STRUCTURAL_DAMAGE")) {
-        decision = "FLAG";
-        flags.push("MANUAL_REVIEW");
-        notes.push("Structural damage risk: decline or expert review recommended.");
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Structural damage risk: expert inspection recommended (may be decline).");
       }
 
-      // 8) Title adjustments (pct/usd)
-      const titlePctUSD = (base + safetyAdj) * (titleAdjPct || 0);
+      const titlePctUSD = (base + safetyAdjUSD) * (titleAdjPct || 0);
 
-      // --- Build values ---
-      // “Projected Retail” = base market (geo adjusted) (matches example structure where projected retail = base market) :contentReference[oaicite:24]{index=24}
-      const projectedRetailUSD = Math.max(0, Math.round((base + safetyAdj + geoAdjUSD)));
+      const projectedRetailUSD = Math.max(0, Math.round(base + safetyAdjUSD + geoAdjUSD));
 
-      // Wholesale target (“our offer”) starts from: base + safety + geo + condition + hours + market factors + risk + title + distance
-      const wholesaleUSD_raw =
-        (base + safetyAdj + geoAdjUSD) +
+      const wholesaleRaw =
+        (base + safetyAdjUSD + geoAdjUSD) +
         conditionAdjUSD +
         hoursAdjUSD +
         seasonAdjUSD +
@@ -670,14 +622,12 @@
         titlePctUSD +
         distAdjUSD;
 
-      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleUSD_raw));
+      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleRaw));
 
-      // Deal analysis (if asking price known) :contentReference[oaicite:25]{index=25}
       const asking = inputs.askingPriceUSD;
       const recon = inputs.reconditioningUSD ?? null;
 
       let transportCostUSD = null;
-      // We approximate transport cost from distance bucket (not perfect, but aligned with the same buckets)
       if (inputs.distanceMiles !== null && !isNaN(inputs.distanceMiles)) {
         if (inputs.distanceMiles <= 100) transportCostUSD = 650;
         else if (inputs.distanceMiles <= 300) transportCostUSD = 1500;
@@ -696,7 +646,7 @@
         netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
         profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
       } else {
-        notes.push("Asking price missing: profit and priority score are limited.");
+        notes.push("Asking price missing: profit and priority score limited.");
       }
 
       const score = priorityScore({
@@ -708,12 +658,10 @@
       });
 
       return {
-        decision,
-        notes,
-        flags,
+        decision, notes, flags,
         breakdown: {
           baseMarketValueUSD: Math.round(base),
-          safetyMarginAdjUSD: Math.round(safetyAdj),
+          safetyMarginAdjUSD: Math.round(safetyAdjUSD),
           geoRegion: region,
           geoMultiplier: regionMult,
           geoAdjUSD: Math.round(geoAdjUSD),
@@ -721,7 +669,7 @@
           conditionAdjUSD: Math.round(conditionAdjUSD),
           hours: inputs.hours,
           equipmentTypeBucket: inputs.equipmentTypeBucket || "Unknown",
-          hoursAdjPct: hoursAdjPct,
+          hoursAdjPct,
           hoursAdjUSD: Math.round(hoursAdjUSD),
           season: seasonName(),
           seasonAdjUSD: Math.round(seasonAdjUSD),
@@ -749,14 +697,14 @@
     }
 
     // -------------------------
-    // LLM call + report rendering
+    // Generate
     // -------------------------
     generateButton.addEventListener('click', async () => {
       if (!API_KEY) { showMessage("API Key is missing. Please set your new API key.", 'error'); return; }
       if (!isAuthReady) { showMessage("Database status unknown. Please wait a moment.", 'error'); return; }
       if (!selectedFiles.length) { showMessage("Add at least one photo.", 'error'); return; }
 
-      showMessage("Generating report... analyzing photos and pulling grounded market data.", 'info');
+      showMessage("Generating report... analyzing photos and pulling grounded listing/market data.", 'info');
       generateButton.disabled = true;
       downloadButton.classList.add('hidden');
       reportContainer.style.display = 'none';
@@ -765,7 +713,6 @@
       originalFiles = [...selectedFiles];
 
       try {
-        // Prepare images
         showMessage("Step 1/3: preparing images...", 'info');
         const resizedFiles = await Promise.all(originalFiles.map(f => resizeForModel(f)));
 
@@ -780,9 +727,9 @@
           r.readAsDataURL(file);
         })));
 
-        // Gather optional user fields
-        const askingPriceUSD = safeNum(askingPriceEl.value);
-        const hours = safeNum(hoursEl.value);
+        // User fields
+        const userAsking = safeNum(askingPriceEl.value);
+        const userHours = safeNum(hoursEl.value);
         const region = regionEl.value || null;
         const distanceMiles = safeNum(distanceEl.value);
         const daysOnMarket = safeNum(domEl.value);
@@ -791,28 +738,45 @@
 
         const userNotes = (notesInput.value || "").trim();
 
-        // Prompt: force structured outputs so our rule engine can operate even when missing
+        // Listing URL: explicit field first; otherwise try to extract from notes
+        let listingUrl = (listingUrlEl.value || "").trim();
+        if (!listingUrl) listingUrl = extractUrlFromText(userNotes);
+
         showMessage("Step 2/3: calling model...", 'info');
 
+        // Prompt: includes a dedicated "listing" object, and instructs URL-first extraction with fallback to indexed mirrors.
         const reportPrompt = `
 You are a heavy equipment inspector + valuation analyst for Bona Fide Iron.
 
-Your job:
-(1) Identify the equipment from photos.
-(2) Estimate a Base Market Value using real-time web grounding (Google Search tool).
-(3) Return clean JSON only (no markdown) in the exact schema below.
+Core goals:
+1) Identify the equipment from photos.
+2) Extract listing details (asking price, hours, location, description) IF a listing URL is provided.
+   - IMPORTANT: Try to use the exact listing URL first.
+   - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
+   - If still not reliable, set fields to null (do not guess).
+3) Estimate Base Market Value using grounded search comps.
 
-IMPORTANT:
-- If a field cannot be determined from photos + notes + grounded search, set it to null (do not guess).
-- Values that are money must be NUMBERS in USD (no $, no commas, no ranges).
-- Provide "sourcesUsedCount" and "sourcesSpreadPct" based on the grounded research you performed.
-- "conditionAdjustmentsUSD" should be the total dollar adjustment from condition findings you observe.
-- "riskAdjustmentsUSD" should be the total dollar adjustment for major risks you observe or verify via grounding.
-- Include "riskFlags" as an array of strings when relevant (examples below).
-- Keep narrative sections short and professional.
+Return ONLY clean JSON (no markdown) in the exact schema below.
+Rules:
+- If a field cannot be determined from photos + notes + grounded search, set it to null.
+- Money must be NUMBERS in USD (no $, no commas, no ranges).
+- Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
+- Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
 
-SCHEMA (return ONLY valid JSON):
+SCHEMA:
 {
+  "listing": {
+    "listingUrl": "string|null",
+    "askingPriceUSD": "number|null",
+    "hours": "number|null",
+    "location": "string|null",
+    "stockNumber": "string|null",
+    "serialNumber": "string|null",
+    "description": "string|null",
+    "listingExtractionConfidence": "string|null",
+    "listingSourcesUsedCount": "number|null",
+    "listingSourcesSpreadPct": "number|null"
+  },
   "equipment": {
     "category": "string (e.g., Excavator, Skid Steer, Dozer, Wheel Loader, Backhoe, Track Loader)",
     "make": "string|null",
@@ -865,7 +829,8 @@ RISK FLAGS examples:
           contents: [{
             parts: [
               { text: reportPrompt },
-              { text: `User-entered listing fields (may be null): askingPriceUSD=${askingPriceUSD}, region=${region}, distanceMiles=${distanceMiles}, daysOnMarket=${daysOnMarket}, inventoryCountSameModel=${inventoryCount}, titleStatus=${titleStatus}` },
+              { text: `Listing URL (may be null): ${listingUrl || "null"}` },
+              { text: `User-entered listing fields (may be null): askingPriceUSD=${userAsking}, hours=${userHours}, region=${region}, distanceMiles=${distanceMiles}, daysOnMarket=${daysOnMarket}, inventoryCountSameModel=${inventoryCount}, titleStatus=${titleStatus}` },
               { text: `User Notes: ${userNotes}` },
               ...base64Images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
             ]
@@ -885,7 +850,7 @@ RISK FLAGS examples:
         let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!jsonText) throw new Error("Model returned empty response.");
 
-        // Extract grounding sources (optional)
+        // Extract grounding sources
         let sources = [];
         const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
         if (groundingMetadata?.groundingAttributions) {
@@ -894,7 +859,7 @@ RISK FLAGS examples:
             .filter(s => s.uri && s.title);
         }
 
-        // Parse JSON strictly
+        // Parse JSON
         jsonText = jsonText.trim();
         const firstBrace = jsonText.indexOf('{');
         const lastBrace = jsonText.lastIndexOf('}');
@@ -906,10 +871,25 @@ RISK FLAGS examples:
 
         report.sources = sources;
 
-        // Build rule inputs for engine
-        const category = report?.equipment?.category || null;
+        // Decide final asking/hours: user-entered wins; otherwise use listing extraction if confident enough
+        const modelAsking = safeNum(report?.listing?.askingPriceUSD);
+        const modelHours = safeNum(report?.listing?.hours) ?? safeNum(report?.hours?.reportedHours);
 
-        // Map to our rule buckets
+        const listingConfidence = (report?.listing?.listingExtractionConfidence || "").toLowerCase();
+        const allowListingFill = (listingConfidence === "high" || listingConfidence === "medium");
+
+        const finalAsking = (userAsking !== null) ? userAsking : (allowListingFill ? modelAsking : null);
+        const finalHours = (userHours !== null) ? userHours : (allowListingFill ? modelHours : null);
+
+        // If both exist and differ wildly, flag manual review
+        let listingMismatchFlag = false;
+        if (userAsking !== null && modelAsking !== null) {
+          const diffPct = Math.abs(userAsking - modelAsking) / Math.max(1, userAsking);
+          if (diffPct > 0.10) listingMismatchFlag = true; // >10% mismatch
+        }
+
+        // Map category -> rule bucket
+        const category = report?.equipment?.category || null;
         function mapBucket(cat) {
           if (!cat) return null;
           const c = cat.toLowerCase();
@@ -922,6 +902,16 @@ RISK FLAGS examples:
           return null;
         }
 
+        // Merge listing-derived data quality into market variance logic (optional)
+        // If listing extraction is low confidence and user didn't provide asking/hours, we flag review.
+        const engineNotesExtra = [];
+        if (listingUrl && !allowListingFill && (userAsking === null || userHours === null)) {
+          engineNotesExtra.push("Listing URL provided, but listing extraction confidence is Low: manual entry recommended for asking price/hours.");
+        }
+        if (listingMismatchFlag) {
+          engineNotesExtra.push("User-entered asking price differs materially from extracted asking price: manual review recommended.");
+        }
+
         const engineInputs = {
           baseMarketValueUSD: safeNum(report?.market?.baseMarketValueUSD),
           sourcesUsedCount: safeNum(report?.market?.sourcesUsedCount),
@@ -930,7 +920,7 @@ RISK FLAGS examples:
           conditionConfidencePct: safeNum(report?.condition?.conditionConfidencePct),
           conditionAdjustmentsUSD: safeNum(report?.condition?.conditionAdjustmentsUSD),
           equipmentTypeBucket: mapBucket(category),
-          hours: hours ?? safeNum(report?.hours?.reportedHours),
+          hours: finalHours,
           region: region ?? null,
           distanceMiles,
           inventoryCount,
@@ -941,12 +931,18 @@ RISK FLAGS examples:
           riskFlags: Array.isArray(report?.risks?.riskFlags) ? report.risks.riskFlags : [],
           marketVelocityScore: safeNum(report?.market?.marketVelocityScore),
           aiConfidencePct: safeNum(report?.condition?.conditionConfidencePct) ?? 0,
-          askingPriceUSD
+          askingPriceUSD: finalAsking
         };
 
         const computed = computeBFIValuation(engineInputs);
 
-        // Store combined report
+        // Inject extra notes/flags if needed
+        if (engineNotesExtra.length) {
+          computed.notes = [...engineNotesExtra, ...(computed.notes || [])];
+          computed.flags = Array.from(new Set([...(computed.flags || []), "MANUAL_REVIEW"]));
+          computed.decision = (computed.decision === "DECLINE") ? "DECLINE" : "FLAG";
+        }
+
         reportData = { raw: report, computed };
 
         // Render report
@@ -958,21 +954,21 @@ RISK FLAGS examples:
         const declineBanner = computed.decision === "DECLINE"
           ? `<div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">
               <div class="font-bold text-lg">DECLINE</div>
-              <div class="text-sm">Title/documentation rules triggered a decline decision.</div>
+              <div class="text-sm">A rule gate triggered a decline decision (e.g., title).</div>
             </div>`
           : "";
 
         const flagBanner = computed.decision === "FLAG"
           ? `<div class="p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-900">
               <div class="font-bold text-lg">Manual Review Recommended</div>
-              <div class="text-sm">One or more rule gates were triggered (limited data, high variance, missing inputs, distance >800, etc.).</div>
+              <div class="text-sm">One or more rule gates were triggered (limited data, high variance, missing inputs, listing extraction uncertainty, etc.).</div>
             </div>`
           : "";
 
         const sourcesHtml = (report.sources && report.sources.length)
           ? `<div class="text-xs text-gray-500 space-y-1">
               <div class="font-semibold text-gray-700">Grounded Sources (from model):</div>
-              ${report.sources.slice(0,8).map(s => `<div>• ${s.title}</div>`).join('')}
+              ${report.sources.slice(0,10).map(s => `<div>• ${s.title}</div>`).join('')}
             </div>`
           : `<div class="text-xs text-gray-500">No source metadata returned by the model.</div>`;
 
@@ -980,13 +976,32 @@ RISK FLAGS examples:
           ? `<ul class="list-disc pl-5 text-sm text-gray-700 space-y-1">${computed.notes.map(n => `<li>${n}</li>`).join('')}</ul>`
           : `<div class="text-sm text-gray-600">No additional notes.</div>`;
 
+        const listingBlock = `
+          <div class="p-4 bg-gray-50 rounded-xl border">
+            <div class="text-sm text-gray-500">Listing Extraction</div>
+            <div class="text-sm text-gray-800 mt-1">
+              <div><strong>URL:</strong> ${report.listing?.listingUrl ?? (listingUrl || "None")}</div>
+              <div><strong>Extraction Confidence:</strong> ${report.listing?.listingExtractionConfidence ?? "N/A"}</div>
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="flex justify-between"><span>Asking (Final)</span><span class="font-semibold">${fmtUSD(finalAsking)}</span></div>
+                <div class="flex justify-between"><span>Hours (Final)</span><span class="font-semibold">${finalHours ?? "N/A"}</span></div>
+                <div class="flex justify-between"><span>Asking (Extracted)</span><span class="font-semibold">${fmtUSD(safeNum(report.listing?.askingPriceUSD))}</span></div>
+                <div class="flex justify-between"><span>Hours (Extracted)</span><span class="font-semibold">${safeNum(report.listing?.hours) ?? "N/A"}</span></div>
+              </div>
+              <div class="text-xs text-gray-500 mt-2">
+                If extracted values are missing or low-confidence, enter them manually for best results.
+              </div>
+            </div>
+          </div>
+        `;
+
         const idBlock = `
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="p-4 bg-gray-50 rounded-xl">
               <div class="text-sm text-gray-500">Equipment</div>
               <div class="text-lg font-bold text-gray-900">${(report.equipment?.year ?? "Year?")} ${(report.equipment?.make ?? "Make?")} ${(report.equipment?.model ?? "Model?")}</div>
               <div class="text-sm text-gray-700">${report.equipment?.category ?? "Category?"}${report.equipment?.configuration ? " • " + report.equipment.configuration : ""}</div>
-              <div class="text-xs text-gray-500 mt-2">Serial: ${report.equipment?.serialNumber ?? "Unknown"}</div>
+              <div class="text-xs text-gray-500 mt-2">Serial: ${report.equipment?.serialNumber ?? report.listing?.serialNumber ?? "Unknown"}</div>
               <div class="text-xs text-gray-500">Attachments: ${report.equipment?.attachments ?? "Unknown"}</div>
             </div>
 
@@ -1023,7 +1038,7 @@ RISK FLAGS examples:
             <div class="text-lg font-bold text-gray-900 mb-3">Valuation Breakdown (Rule Engine)</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
               <div class="flex justify-between"><span>Base Market Value</span><span class="font-semibold">${fmtUSD(b.baseMarketValueUSD)}</span></div>
-              <div class="flex justify-between"><span>Safety Margin (limited data)</span><span class="font-semibold">${fmtUSD(b.safetyMarginAdjUSD)}</span></div>
+              <div class="flex justify-between"><span>Safety Margin</span><span class="font-semibold">${fmtUSD(b.safetyMarginAdjUSD)}</span></div>
 
               <div class="flex justify-between"><span>Geo Region / Multiplier</span><span class="font-semibold">${b.geoRegion} (${b.geoMultiplier})</span></div>
               <div class="flex justify-between"><span>Geo Adjustment</span><span class="font-semibold">${fmtUSD(b.geoAdjUSD)}</span></div>
@@ -1065,9 +1080,6 @@ RISK FLAGS examples:
               <div class="flex justify-between"><span>Profit Margin</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
               <div class="flex justify-between"><span>Priority</span><span class="font-bold">${d.priorityScore ?? "N/A"} — ${d.priorityTier ?? ""}</span></div>
             </div>
-            <div class="text-xs text-gray-500 mt-2">
-              Priority weights: margin 40%, profit 30%, confidence 15%, velocity 10%, days-on-market 5%.
-            </div>
           </div>
         `;
 
@@ -1088,6 +1100,7 @@ RISK FLAGS examples:
         reportContent.innerHTML = `
           ${declineBanner}
           ${flagBanner}
+          ${listingBlock}
           ${idBlock}
           ${valuationBlock}
           ${breakdownTable}
@@ -1102,7 +1115,6 @@ RISK FLAGS examples:
 
         showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
 
-        // Save to Firestore
         if (db && userId) {
           try {
             const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
@@ -1146,7 +1158,7 @@ RISK FLAGS examples:
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 10;
 
-        // Page 1: Report content
+        // Page 1: report
         const canvas = await html2canvas(reportElement, { scale: 2 });
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
         const imgW = pageWidth - margin * 2;
@@ -1154,7 +1166,7 @@ RISK FLAGS examples:
         doc.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
         addFooter(doc, margin, pageHeight);
 
-        // Reference Images pages (smaller + lower-res)
+        // Reference images (smaller ~3")
         if (originalFiles.length) {
           doc.addPage();
           let y = margin;
@@ -1174,22 +1186,18 @@ RISK FLAGS examples:
             r.readAsDataURL(file);
             await new Promise(res => r.onloadend = res);
 
-            // lower-res in PDF
             const url = r.result;
 
-            // Try to estimate height using an Image object
             const img = new Image();
             img.src = url;
             await new Promise(res => img.onload = res);
             const hMm = imgTargetWidthMm * (img.height / img.width);
 
-            // new row every 2 images
             const isLeft = (i % 2 === 0);
             const x = isLeft ? margin : col2x;
 
             if (isLeft && i > 0) y += hMm + pad;
 
-            // page break
             if (y + hMm > pageHeight - margin - 10) {
               doc.addPage();
               y = margin;
@@ -1200,11 +1208,6 @@ RISK FLAGS examples:
             }
 
             doc.addImage(url, 'JPEG', x, y, imgTargetWidthMm, hMm, undefined, 'FAST');
-
-            // if right column, don't advance; next left handles row advance
-            if (!isLeft) {
-              // keep y for next row advance
-            }
           }
         }
 
