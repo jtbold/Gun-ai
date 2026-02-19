@@ -1,109 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Equipment Report Generator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .container { max-width: 800px; }
-        #report-header {
-            display: flex; flex-direction: column; align-items: center;
-            padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1rem;
-        }
-        .no-break { white-space: nowrap; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>BFI Equipment Report Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background:#f3f4f6; }
+    .container { max-width: 900px; }
+    .no-break { white-space: nowrap; }
+    #report-header { display:flex; flex-direction:column; align-items:center; padding-bottom:1rem; border-bottom:2px solid #e5e7eb; margin-bottom:1rem; }
+  </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
-<div class="container bg-white rounded-3xl shadow-xl p-8 space-y-8">
-    <header class="text-center">
-        <img
-            src="./bona-fide-iron-logo.jpg"
-            alt="Bona Fide Iron"
-            class="mx-auto h-16 mb-4"
-            onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
-        >
-        <div id="logo-fallback" class="hidden mx-auto mb-4 p-3 rounded-xl bg-yellow-50 text-yellow-800 text-sm" style="display:none;">
-            Logo not found. Make sure the file exists in the SAME folder as this HTML and is named exactly:
-            <span class="font-semibold">bona-fide-iron-logo.jpg</span>
+<body class="min-h-screen p-4 flex flex-col items-center">
+  <div class="container bg-white rounded-3xl shadow-xl p-8 space-y-8">
+    <header class="text-center space-y-3">
+      <div class="flex items-center justify-center gap-3">
+        <!-- logo file should live next to index.html in your repo -->
+        <img id="bfi-logo" src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-14 w-auto rounded" />
+        <div class="text-left">
+          <div class="text-xl font-extrabold text-gray-900">Bona Fide Iron</div>
+          <div class="text-sm text-gray-500">AI Valuation Engine</div>
         </div>
+      </div>
 
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Equipment Report Generator</h1>
-        <p class="text-gray-500">Upload up to 20 photos to identify construction equipment and generate a professional report.</p>
-        <p class="text-sm text-gray-400 mt-2">PDF includes all images (smaller + compressed).</p>
-        <p id="user-id" class="text-xs text-gray-400 mt-2"></p>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">Construction Equipment Report Generator</h1>
+      <p class="text-gray-500">
+        Upload up to <strong>20</strong> photos to generate a professional identification + valuation + deal analysis report.
+      </p>
+      <p id="user-id" class="text-xs text-gray-400"></p>
     </header>
 
+    <!-- Upload -->
     <div id="drop-zone" class="w-full rounded-2xl border-4 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-gray-400">
-        <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
-        <div class="text-lg font-medium text-gray-700">Drag & drop, paste (Ctrl+V), or click to upload images</div>
-        <p class="text-sm text-gray-400 mt-2">Maximum of 20 images, up to 4MB each.</p>
-        <button id="upload-button" class="mt-6 px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
-            Choose Images
-        </button>
+      <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
+      <div class="text-lg font-medium text-gray-700">Drag & drop, paste (Ctrl+V), or click to upload images</div>
+      <p class="text-sm text-gray-400 mt-2">Maximum of 20 images, up to 6MB each.</p>
+      <button id="upload-button" class="mt-6 px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
+        Choose Images
+      </button>
     </div>
 
+    <!-- Optional listing details (helps the rules engine) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Seller Asking Price (USD) — optional</label>
+        <input id="asking-price" type="number" min="0" step="100"
+               placeholder="e.g., 107000"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">If blank, the app will still value it, but deal scoring will be limited.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Operating Hours — optional</label>
+        <input id="hours" type="number" min="0" step="10"
+               placeholder="e.g., 8200"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">If unknown, we skip hours depreciation and flag “manual review”.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Region — optional (defaults Mountain West)</label>
+        <select id="region" class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Auto / Default</option>
+          <option value="Mountain West">Mountain West (CO/WY/MT)</option>
+          <option value="Texas/Oklahoma">Texas/Oklahoma</option>
+          <option value="California">California</option>
+          <option value="Pacific Northwest">Pacific Northwest</option>
+          <option value="Midwest">Midwest</option>
+          <option value="Southeast">Southeast</option>
+          <option value="Northeast">Northeast</option>
+        </select>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Distance from Denver (miles) — optional</label>
+        <input id="distance" type="number" min="0" step="10"
+               placeholder="e.g., 250"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">Used for transport adjustment.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Days on Market — optional</label>
+        <input id="days-on-market" type="number" min="0" step="1"
+               placeholder="e.g., 28"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Inventory Count (same model) — optional</label>
+        <input id="inventory-count" type="number" min="0" step="1"
+               placeholder="e.g., 2"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+
+      <div class="space-y-2 md:col-span-2">
+        <label class="text-sm font-medium text-gray-700">Title / Documentation — optional</label>
+        <select id="title-status" class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Unknown</option>
+          <option value="Clean">Clean / OK</option>
+          <option value="OutOfState">Out-of-state title</option>
+          <option value="Lien">Lien holder listed</option>
+          <option value="Rebuilt">Rebuilt title</option>
+          <option value="Salvage">Salvage title</option>
+          <option value="NoTitle">No title available</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Notes -->
     <div class="w-full">
-        <div class="flex flex-col gap-3">
-            <label for="url-input" class="text-sm font-medium text-gray-700">
-                To add images from the internet, right-click an image → "Copy Image Address" → paste URL below.
-            </label>
-            <div class="flex items-center gap-3">
-                <input type="text" id="url-input" placeholder="Paste image URL here..." class="flex-grow rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <button id="url-button" class="px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
-                    Add from URL
-                </button>
-            </div>
-        </div>
+      <div class="flex flex-col gap-3">
+        <label for="notes-input" class="text-sm font-medium text-gray-700">
+          Optional notes (serial, attachments, recent overhaul, issues, location, listing link, etc.)
+        </label>
+        <textarea id="notes-input" rows="4"
+                  class="rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+      </div>
     </div>
 
-    <div class="w-full">
-        <div class="flex flex-col gap-3">
-            <label for="notes-input" class="text-sm font-medium text-gray-700">
-                Optional notes (serial #, hours, attachments, known issues, location, auction notes):
-            </label>
-            <textarea id="notes-input" rows="3" class="rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-        </div>
-    </div>
+    <!-- Previews -->
+    <div id="image-previews" class="flex flex-wrap gap-4 justify-center items-center p-4 rounded-xl bg-gray-50 shadow-inner" style="display:none;"></div>
 
-    <div id="image-previews" class="flex flex-wrap gap-3 justify-center items-center p-4 rounded-xl bg-gray-50 shadow-inner" style="display:none;"></div>
-
+    <!-- Actions -->
     <div class="flex flex-col items-center justify-center space-y-4">
-        <button id="generate-button" class="w-full px-8 py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            Generate Report
-        </button>
+      <button id="generate-button" class="w-full px-8 py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        Generate Report
+      </button>
 
-        <button id="download-button" class="w-full px-8 py-4 bg-gray-500 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-gray-600 transition-colors hidden">
-            Download Report
-        </button>
+      <button id="download-button" class="w-full px-8 py-4 bg-gray-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-gray-700 transition-colors hidden">
+        Download Report (PDF)
+      </button>
 
-        <div id="status-message" class="text-sm text-center text-gray-600"></div>
+      <div id="status-message" class="text-sm text-center text-gray-600"></div>
     </div>
 
+    <!-- Report -->
     <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display:none;">
-        <div id="report-header">
-            <img
-                src="./bona-fide-iron-logo.jpg"
-                alt="Bona Fide Iron"
-                class="h-10 mb-2"
-                onerror="this.style.display='none';"
-            >
-            <h2 class="text-2xl font-bold text-gray-900">Equipment Identification Report</h2>
-        </div>
-        <div id="report-content" class="space-y-4"></div>
-    </div>
-</div>
+      <div id="report-header" class="space-y-2">
+        <img src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-12 w-auto rounded" />
+        <h2 class="text-2xl font-bold text-gray-900">Equipment Identification & Valuation Report</h2>
+        <div id="report-meta" class="text-xs text-gray-500"></div>
+      </div>
 
-<script type="module">
+      <div id="report-content" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+    // Global variables provided by the environment (Canvas / hosted)
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -114,49 +169,215 @@
     const API_KEY = "";
     // ***************************************************************
 
-    // Keep the same “offer is slightly under market” idea
-    const PRICE_ADJUSTMENT_PERCENTAGE = 0.05;
+    // -------------------------
+    // BFI RULE ENGINE CONSTANTS
+    // -------------------------
 
+    // Regional multipliers (Colorado base = 1.00) :contentReference[oaicite:7]{index=7}
+    const REGION_MULTIPLIERS = {
+      "Mountain West": 1.00,
+      "Texas/Oklahoma": 1.10,      // choose midpoint of +8% to +12%
+      "California": 1.08,          // choose midpoint of +5% to +10%
+      "Pacific Northwest": 1.04,   // choose midpoint of +3% to +5%
+      "Midwest": 0.94,             // choose midpoint of -5% to -8%
+      "Southeast": 1.02,           // choose midpoint of 0% to +3%
+      "Northeast": 0.985           // choose midpoint of -3% to 0%
+    };
+
+    // Distance-based adjustment (uses the “Valuation Adjustment” numbers) :contentReference[oaicite:8]{index=8}
+    function distanceAdjustmentUSD(distanceMiles) {
+      if (distanceMiles === null || distanceMiles === undefined || isNaN(distanceMiles)) return null;
+      if (distanceMiles <= 100) return -650;
+      if (distanceMiles <= 300) return -1500;
+      if (distanceMiles <= 500) return -2750;
+      if (distanceMiles <= 800) return -4250;
+      return null; // >800 -> manual review per rules
+    }
+
+    // Seasonal adjustments :contentReference[oaicite:9]{index=9}
+    function currentSeasonAdjustmentPct() {
+      const now = new Date();
+      const m = now.getMonth() + 1;
+      // Spring: Mar-May, Summer: Jun-Aug, Fall: Sep-Nov, Winter: Dec-Feb
+      if (m >= 3 && m <= 5) return 0.065;     // midpoint of +5% to +8%
+      if (m >= 6 && m <= 8) return 0.04;      // midpoint of +3% to +5%
+      if (m >= 9 && m <= 11) return 0.0;      // baseline
+      return -0.075;                          // midpoint of -5% to -10%
+    }
+
+    function seasonName() {
+      const m = (new Date()).getMonth() + 1;
+      if (m >= 3 && m <= 5) return "Spring";
+      if (m >= 6 && m <= 8) return "Summer";
+      if (m >= 9 && m <= 11) return "Fall";
+      return "Winter";
+    }
+
+    // Inventory saturation penalties :contentReference[oaicite:10]{index=10}
+    function saturationPenaltyPct(inventoryCount) {
+      if (inventoryCount === null || inventoryCount === undefined || isNaN(inventoryCount)) return null;
+      if (inventoryCount <= 2) return 0.0;
+      if (inventoryCount <= 4) return -0.05;
+      if (inventoryCount <= 6) return -0.10;
+      return -0.20; // >6 => -20% or decline (we apply penalty and flag)
+    }
+
+    // Title/documentation rules :contentReference[oaicite:11]{index=11}
+    function titleRule(titleStatus) {
+      // returns { decision: "OK"|"DECLINE"|"FLAG", adjustmentUSD, adjustmentPct, notes[] }
+      const out = { decision:"OK", adjustmentUSD:0, adjustmentPct:0, notes:[] };
+      if (!titleStatus) return out;
+
+      if (titleStatus === "NoTitle" || titleStatus === "Salvage") {
+        out.decision = "DECLINE";
+        out.notes.push("Title status triggers DECLINE under BFI rules.");
+        return out;
+      }
+      if (titleStatus === "Rebuilt") {
+        out.decision = "FLAG";
+        out.adjustmentPct = -0.25; // “-25% minimum or decline”
+        out.notes.push("Rebuilt title: -25% minimum adjustment or decline.");
+        return out;
+      }
+      if (titleStatus === "OutOfState") {
+        out.decision = "OK";
+        out.adjustmentUSD = -500; // “Add $500 for title transfer costs”
+        out.notes.push("Out-of-state title: -$500 transfer cost.");
+        return out;
+      }
+      if (titleStatus === "Lien") {
+        out.decision = "FLAG";
+        out.notes.push("Lien holder listed: verify lien release before purchase.");
+        return out;
+      }
+      return out;
+    }
+
+    // Hours depreciation tables :contentReference[oaicite:12]{index=12}
+    const LIFESPAN_BY_TYPE = {
+      "Excavator (standard)": { lifespan: 10000, highThreshold: 8000, ratePer500: -0.02 },
+      "Excavator (heavy duty)": { lifespan: 15000, highThreshold: 12000, ratePer500: -0.02 },
+      "Dozer": { lifespan: 12000, highThreshold: 10000, ratePer500: -0.025 },
+      "Wheel loader": { lifespan: 10000, highThreshold: 8000, ratePer500: -0.02 },
+      "Track loader": { lifespan: 8000, highThreshold: 6500, ratePer500: -0.025 },
+      "Backhoe": { lifespan: 6000, highThreshold: 5000, ratePer500: -0.03 },
+      "Skid steer": { lifespan: 5000, highThreshold: 4000, ratePer500: -0.03 }
+    };
+
+    // Hour-based penalty logic (percent-of-life) :contentReference[oaicite:13]{index=13}
+    function hoursPenaltyPct(hours, lifespan) {
+      if (hours === null || hours === undefined || isNaN(hours) || !lifespan) return null;
+      const pct = hours / lifespan;
+      if (pct <= 0.40) return +0.05;
+      if (pct <= 0.60) return 0.0;
+      if (pct <= 0.80) return -0.10;
+      if (pct <= 1.00) return -0.25;
+      return -0.40;
+    }
+
+    // Cross-validation safety margin when only 1–2 sources are available :contentReference[oaicite:14]{index=14}
+    function limitedDataSafetyMarginPct(sourcesUsedCount) {
+      if (sourcesUsedCount === null || sourcesUsedCount === undefined || isNaN(sourcesUsedCount)) return null;
+      if (sourcesUsedCount <= 2) return -0.15;
+      return 0.0;
+    }
+
+    // Priority scoring weights :contentReference[oaicite:15]{index=15}
+    function priorityScore({ profitMarginPct, absoluteProfitUSD, confidencePct, marketVelocityScore, daysOnMarket }) {
+      // Profit margin points: 20%=>40, 30%=>60, 40%=>80, 50%+=>100
+      function marginPoints(p) {
+        if (p === null || p === undefined || isNaN(p)) return 0;
+        if (p >= 0.50) return 100;
+        if (p >= 0.40) return 80;
+        if (p >= 0.30) return 60;
+        if (p >= 0.20) return 40;
+        return Math.max(0, Math.round(p * 200)); // gentle scaling below 20%
+      }
+
+      // Absolute profit points: 10k=>50, 20k=>75, 30k+=>100
+      function profitPoints(p) {
+        if (p === null || p === undefined || isNaN(p)) return 0;
+        if (p >= 30000) return 100;
+        if (p >= 20000) return 75;
+        if (p >= 10000) return 50;
+        return Math.max(0, Math.round((p / 10000) * 50));
+      }
+
+      // Days on market points: >30 => 100, <7 => 25 (simple ramp)
+      function domPoints(d) {
+        if (d === null || d === undefined || isNaN(d)) return 50;
+        if (d < 7) return 25;
+        if (d > 30) return 100;
+        // linear 7..30 => 40..95
+        return Math.round(40 + (d - 7) * (55 / 23));
+      }
+
+      const mPts = marginPoints(profitMarginPct);
+      const pPts = profitPoints(absoluteProfitUSD);
+      const cPts = Math.max(0, Math.min(100, Math.round(confidencePct || 0)));
+      const vPts = Math.max(0, Math.min(100, Math.round(marketVelocityScore || 50)));
+      const dPts = domPoints(daysOnMarket);
+
+      const score =
+        (mPts * 0.40) +
+        (pPts * 0.30) +
+        (cPts * 0.15) +
+        (vPts * 0.10) +
+        (dPts * 0.05);
+
+      return Math.round(score * 10) / 10;
+    }
+
+    function priorityTier(score) {
+      if (score >= 90) return "CRITICAL";
+      if (score >= 75) return "HIGH";
+      if (score >= 60) return "MEDIUM";
+      if (score >= 40) return "LOW";
+      return "PASS";
+    }
+
+    // ---------------
+    // App state
+    // ---------------
     let reportData = null;
     let selectedFiles = [];
     let originalFiles = [];
 
+    // Firebase
     let app, db = null, auth, userId;
     let isAuthReady = false;
 
     async function initFirebase() {
-        try {
-            if (Object.keys(firebaseConfig).length === 0) {
-                isAuthReady = true;
-                userId = crypto.randomUUID();
-                document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
-                return;
-            }
-
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-
-            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-            else await signInAnonymously(auth);
-
-            userId = auth.currentUser.uid;
-            document.getElementById('user-id').textContent = `User ID: ${userId}`;
-            isAuthReady = true;
-        } catch (error) {
-            console.error("Firebase init error:", error);
-            db = null;
-            document.getElementById('status-message').textContent =
-                "Failed to connect to the database. Some features may not work.";
+      try {
+        if (Object.keys(firebaseConfig).length === 0) {
+          isAuthReady = true;
+          userId = crypto.randomUUID();
+          document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
+          return;
         }
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+        else await signInAnonymously(auth);
+
+        userId = auth.currentUser.uid;
+        document.getElementById('user-id').textContent = `User ID: ${userId}`;
+        isAuthReady = true;
+      } catch (e) {
+        console.error("Firebase init error:", e);
+        db = null;
+        isAuthReady = true; // allow app to run even without db
+        document.getElementById('status-message').textContent = "Database unavailable (local mode).";
+      }
     }
     initFirebase();
 
+    // DOM
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const uploadButton = document.getElementById('upload-button');
-    const urlInput = document.getElementById('url-input');
-    const urlButton = document.getElementById('url-button');
     const notesInput = document.getElementById('notes-input');
     const generateButton = document.getElementById('generate-button');
     const downloadButton = document.getElementById('download-button');
@@ -164,550 +385,843 @@
     const statusMessage = document.getElementById('status-message');
     const reportContainer = document.getElementById('report-container');
     const reportContent = document.getElementById('report-content');
+    const reportMeta = document.getElementById('report-meta');
 
+    const askingPriceEl = document.getElementById('asking-price');
+    const hoursEl = document.getElementById('hours');
+    const regionEl = document.getElementById('region');
+    const distanceEl = document.getElementById('distance');
+    const domEl = document.getElementById('days-on-market');
+    const inventoryEl = document.getElementById('inventory-count');
+    const titleEl = document.getElementById('title-status');
+
+    // Limits
     const MAX_FILES = 20;
-    const MAX_FILE_SIZE_MB = 4;
-    const MAX_IMAGE_SIDE_PX = 650;
+    const MAX_FILE_SIZE_MB = 6;
+
+    // Image processing:
+    // - For model: keep analysis stable (max 1024 side, jpeg)
+    // - For PDF: make smaller (target width ~3 inches = 76mm on A4), lower quality
+    const MAX_IMAGE_SIDE_PX_MODEL = 1024;
     const UNSUPPORTED_MIME_TYPES = ['image/avif', 'image/svg+xml'];
 
-    // PDF output sizing you requested
-    const PDF_IMAGE_WIDTH_MM = 76; // ~3"
-    const PDF_IMAGE_MAX_PX = 900;
-    const PDF_JPEG_QUALITY = 0.70;
-
     function showMessage(message, type = 'info') {
-        statusMessage.className = `text-sm text-center mt-4 ${type === 'error' ? 'text-red-600' : 'text-gray-600'}`;
-        statusMessage.textContent = message;
+      statusMessage.className = `text-sm text-center mt-4 ${type === 'error' ? 'text-red-600' : 'text-gray-600'}`;
+      statusMessage.textContent = message;
     }
 
     function toggleGenerateButton() {
-        generateButton.disabled = selectedFiles.length === 0;
-        if (selectedFiles.length === 0 && !reportData) downloadButton.classList.add('hidden');
+      generateButton.disabled = selectedFiles.length === 0;
+      if (selectedFiles.length === 0 && !reportData) downloadButton.classList.add('hidden');
     }
 
     function showPreviews() {
-        imagePreviewsContainer.innerHTML = '';
-        if (selectedFiles.length > 0) {
-            imagePreviewsContainer.style.display = 'flex';
-            selectedFiles.forEach((file, index) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const imgWrapper = document.createElement('div');
-                    imgWrapper.className = 'relative group w-24 h-24 rounded-lg overflow-hidden shadow-md';
-                    imgWrapper.innerHTML = `
-                        <img src="${e.target.result}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
-                        <button class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 leading-none text-sm opacity-0 group-hover:opacity-100 transition-opacity" data-index="${index}">
-                            &times;
-                        </button>
-                    `;
-                    imagePreviewsContainer.appendChild(imgWrapper);
-                };
-                reader.readAsDataURL(file);
-            });
-        } else {
-            imagePreviewsContainer.style.display = 'none';
-        }
+      imagePreviewsContainer.innerHTML = '';
+      if (selectedFiles.length > 0) {
+        imagePreviewsContainer.style.display = 'flex';
+        selectedFiles.forEach((file, index) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'relative group w-28 h-28 rounded-lg overflow-hidden shadow-md';
+            imgWrapper.innerHTML = `
+              <img src="${e.target.result}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
+              <button class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 leading-none text-sm opacity-0 group-hover:opacity-100 transition-opacity" data-index="${index}">
+                &times;
+              </button>
+            `;
+            imagePreviewsContainer.appendChild(imgWrapper);
+          };
+          reader.readAsDataURL(file);
+        });
+      } else {
+        imagePreviewsContainer.style.display = 'none';
+      }
     }
 
     function processFiles(files) {
-        let newFiles = Array.from(files).filter(file => {
-            const mimeType = file.type.toLowerCase();
-            if (!mimeType.startsWith('image/')) { showMessage(`"${file.name}" is not an image.`, 'error'); return false; }
-            if (UNSUPPORTED_MIME_TYPES.includes(mimeType)) { showMessage(`"${file.name}" unsupported format. Use JPG/PNG.`, 'error'); return false; }
-            if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showMessage(`"${file.name}" exceeds ${MAX_FILE_SIZE_MB}MB.`, 'error'); return false; }
-            return true;
-        });
+      let newFiles = Array.from(files).filter(file => {
+        const mt = (file.type || '').toLowerCase();
+        if (!mt.startsWith('image/')) { showMessage(`"${file.name}" is not an image.`, 'error'); return false; }
+        if (UNSUPPORTED_MIME_TYPES.includes(mt)) { showMessage(`"${file.name}" is an unsupported format. Use JPG/PNG.`, 'error'); return false; }
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showMessage(`"${file.name}" exceeds ${MAX_FILE_SIZE_MB}MB.`, 'error'); return false; }
+        return true;
+      });
 
-        if (selectedFiles.length + newFiles.length > MAX_FILES) {
-            const limit = MAX_FILES - selectedFiles.length;
-            newFiles = newFiles.slice(0, limit);
-            showMessage(`Max reached. Added ${limit}. Total: ${MAX_FILES}/${MAX_FILES}`, 'error');
-        }
+      if (selectedFiles.length + newFiles.length > MAX_FILES) {
+        const limit = MAX_FILES - selectedFiles.length;
+        newFiles = newFiles.slice(0, limit);
+        showMessage(`Max ${MAX_FILES} images. Added ${limit}.`, 'error');
+      }
 
-        selectedFiles = [...selectedFiles, ...newFiles].slice(0, MAX_FILES);
-        showPreviews();
-        toggleGenerateButton();
-
-        if (newFiles.length > 0) showMessage(`Added ${newFiles.length}. Total: ${selectedFiles.length}/${MAX_FILES}`);
+      selectedFiles = [...selectedFiles, ...newFiles].slice(0, MAX_FILES);
+      showPreviews();
+      toggleGenerateButton();
+      if (newFiles.length) showMessage(`Added ${newFiles.length} image(s). Total: ${selectedFiles.length}/${MAX_FILES}`);
     }
 
-    function resizeImage(file) {
-        return new Promise(resolve => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width, height = img.height;
-
-                if (width > MAX_IMAGE_SIDE_PX || height > MAX_IMAGE_SIDE_PX) {
-                    const ratio = Math.max(width / MAX_IMAGE_SIDE_PX, height / MAX_IMAGE_SIDE_PX);
-                    width /= ratio; height /= ratio;
-                }
-
-                canvas.width = width; canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob(blob => {
-                    const resizedFile = new File([blob], file.name, { type: 'image/png' });
-                    resolve(resizedFile);
-                }, 'image/png');
-            };
-            img.src = URL.createObjectURL(file);
-        });
-    }
-
-    async function fileToCompressedJpegDataUrl(file) {
-        const dataUrl = await new Promise((resolve, reject) => {
-            const r = new FileReader();
-            r.onloadend = () => resolve(r.result);
-            r.onerror = reject;
-            r.readAsDataURL(file);
-        });
-
+    // Resize for model stability
+    function resizeForModel(file) {
+      return new Promise(resolve => {
         const img = new Image();
-        img.src = dataUrl;
-        await new Promise(resolve => img.onload = resolve);
-
-        let w = img.width, h = img.height;
-        if (w > PDF_IMAGE_MAX_PX || h > PDF_IMAGE_MAX_PX) {
-            const ratio = Math.max(w / PDF_IMAGE_MAX_PX, h / PDF_IMAGE_MAX_PX);
-            w /= ratio; h /= ratio;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-
-        return { dataUrl: canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY), width: w, height: h };
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > MAX_IMAGE_SIDE_PX_MODEL || h > MAX_IMAGE_SIDE_PX_MODEL) {
+            const r = Math.max(w / MAX_IMAGE_SIDE_PX_MODEL, h / MAX_IMAGE_SIDE_PX_MODEL);
+            w = Math.round(w / r); h = Math.round(h / r);
+          }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            resolve(new File([blob], file.name.replace(/\.\w+$/, '') + ".jpg", { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.85);
+        };
+        img.src = URL.createObjectURL(file);
+      });
     }
 
+    // Events
     uploadButton.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value = ''; });
+    fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value=''; });
 
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-gray-500','bg-gray-50'); });
-    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); });
-    dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); processFiles(e.dataTransfer.files); });
+    dropZone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropZone.classList.add('border-gray-500','bg-gray-50'); });
+    dropZone.addEventListener('dragleave', (e)=>{ e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); });
+    dropZone.addEventListener('drop', (e)=>{ e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); processFiles(e.dataTransfer.files); });
 
     window.addEventListener('paste', (e) => {
-        const items = e.clipboardData.items;
-        const files = [];
-        for (let i=0;i<items.length;i++) if (items[i].kind==='file' && items[i].type.startsWith('image/')) files.push(items[i].getAsFile());
-        if (files.length>0) processFiles(files);
-    });
-
-    urlButton.addEventListener('click', async () => {
-        const url = urlInput.value.trim();
-        if (!url) return showMessage('Enter a valid image URL.', 'error');
-        if (selectedFiles.length >= MAX_FILES) return showMessage(`Max ${MAX_FILES} images.`, 'error');
-        if (!url.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i)) return showMessage('URL must end in .jpg/.png/etc', 'error');
-
-        showMessage('Fetching image from URL (may fail due to CORS)...', 'info');
-        urlButton.disabled = true;
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const contentType = response.headers.get('Content-Type')?.toLowerCase();
-            if (!contentType || !contentType.startsWith('image/')) throw new Error(`Not an image. Content-Type: ${contentType}`);
-            if (UNSUPPORTED_MIME_TYPES.includes(contentType)) return showMessage(`Unsupported format: ${contentType}`, 'error');
-
-            const blob = await response.blob();
-            const filename = url.substring(url.lastIndexOf('/') + 1) || 'image';
-            const file = new File([blob], filename, { type: blob.type });
-
-            if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) showMessage(`Image exceeds ${MAX_FILE_SIZE_MB}MB.`, 'error');
-            else { processFiles([file]); urlInput.value=''; showMessage('Image added successfully.'); }
-        } catch (err) {
-            console.error(err);
-            showMessage(`Failed to load URL image: ${err.message} (likely CORS)`, 'error');
-        } finally {
-            urlButton.disabled = false;
-        }
+      const items = e.clipboardData.items;
+      const files = [];
+      for (let i=0;i<items.length;i++) {
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) files.push(items[i].getAsFile());
+      }
+      if (files.length) processFiles(files);
     });
 
     imagePreviewsContainer.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') {
-            const index = e.target.getAttribute('data-index');
-            selectedFiles.splice(index, 1);
-            showPreviews();
-            toggleGenerateButton();
-            showMessage(`Removed image ${parseInt(index)+1}.`);
-        }
+      if (e.target.tagName === 'BUTTON') {
+        const idx = Number(e.target.getAttribute('data-index'));
+        selectedFiles.splice(idx, 1);
+        showPreviews();
+        toggleGenerateButton();
+        showMessage(`Removed image ${idx+1}.`);
+      }
     });
 
-    generateButton.addEventListener('click', async () => {
-        if (!API_KEY) return showMessage("API Key is missing. (Build script didn't inject it)", 'error');
-        if (!isAuthReady) return showMessage("Database status unknown. Please wait a moment.", 'error');
+    // Helpers
+    const fmtUSD = (n) => {
+      if (n === null || n === undefined || isNaN(n)) return "N/A";
+      return new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 }).format(n);
+    };
+    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+    const safeNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
 
-        showMessage("Generating report... Analyzing images and searching.", 'info');
-        generateButton.disabled = true;
-        downloadButton.classList.add('hidden');
-        reportContainer.style.display = 'none';
+    function computeBFIValuation(inputs) {
+      // inputs includes: baseMarketValueUSD, sourcesUsedCount, sourcesSpreadPct, conditionAdjUSD, conditionTier, conditionConfidencePct,
+      // equipmentTypeBucket, hours, region, distanceMiles, inventoryCount, daysOnMarket, titleStatus, reconCostUSD, riskAdjUSD, marketVelocityScore, aiConfidencePct
+      const notes = [];
+      const flags = [];
+      let decision = "OK"; // OK / FLAG / DECLINE
 
-        let retries = 0;
-        const MAX_RETRIES = 3;
-
-        originalFiles = [...selectedFiles];
-
-        const resetUIAndResources = async () => {
-            selectedFiles = [];
-            fileInput.value = '';
-            showPreviews();
-            await new Promise(res => setTimeout(res, 500));
+      // 0) Title rules first (hard stops) :contentReference[oaicite:16]{index=16}
+      const t = titleRule(inputs.titleStatus);
+      if (t.decision === "DECLINE") {
+        return {
+          decision: "DECLINE",
+          notes: [...t.notes],
+          flags: ["DECLINE"],
+          breakdown: {},
+          deal: {}
         };
+      }
+      if (t.decision === "FLAG") { decision = "FLAG"; flags.push("MANUAL_REVIEW"); notes.push(...t.notes); }
+      let titleAdjUSD = t.adjustmentUSD || 0;
+      let titleAdjPct = t.adjustmentPct || 0;
 
-        async function callApiWithRetry() {
-            try {
-                showMessage("Step 1/3: Resizing and preparing images...", 'info');
-                const resizedFiles = await Promise.all(originalFiles.map(file => resizeImage(file)));
+      // 1) Base Market Value + cross-validation safety margin :contentReference[oaicite:17]{index=17}
+      let base = inputs.baseMarketValueUSD;
+      if (base === null) {
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("No comparable data found: unable to value automatically.");
+        return {
+          decision: "FLAG",
+          notes,
+          flags,
+          breakdown: { baseMarketValueUSD: null },
+          deal: {}
+        };
+      }
 
-                const base64Images = await Promise.all(
-                    resizedFiles.map(file => new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const dataUrl = reader.result;
-                            resolve({
-                                data: dataUrl.split(',')[1],
-                                mimeType: dataUrl.split(',')[0].split(':')[1].split(';')[0],
-                            });
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    }))
-                );
+      const spread = inputs.sourcesSpreadPct;
+      const srcCount = inputs.sourcesUsedCount;
 
-                showMessage("Step 2/3: Sending request to model...", 'info');
-                const userNotes = notesInput.value.trim();
+      if (spread !== null) {
+        if (spread <= 10) {
+          // high confidence path: use as-is
+        } else if (spread <= 20) {
+          decision = "FLAG";
+          flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary 10–20%: flagged for review.");
+        } else {
+          decision = "FLAG";
+          flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary >20%: use conservative estimate and require manual review.");
+          // conservative estimate: shave 10% off base
+          base = base * 0.90;
+        }
+      }
 
-                const reportPrompt = `
-You are a construction equipment inspector and appraiser specializing in dealer purchase offers and resale pricing.
+      const safetyMarginPct = limitedDataSafetyMarginPct(srcCount);
+      let safetyAdj = 0;
+      if (safetyMarginPct !== null && safetyMarginPct < 0) {
+        safetyAdj = base * safetyMarginPct;
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("Limited data (1–2 sources): applied 15% safety margin and flagged for review.");
+      }
 
-Identify the equipment from photos:
-- Type, make, model, and any visible serial/VIN and hour meter.
-- Note attachments (bucket, thumb, coupler, etc.) and options.
-- Summarize visible condition conservatively (photos only).
-- Use Google Search grounding to estimate a realistic retail/asking price for comparable units (same model/era/condition).
+      // 2) Condition assessment adjustment (USD) :contentReference[oaicite:18]{index=18}
+      let conditionAdjUSD = inputs.conditionAdjustmentsUSD ?? null;
+      if (conditionAdjUSD === null) {
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("Condition adjustment missing: flagged for manual review.");
+        conditionAdjUSD = 0;
+      }
 
-Return ONLY valid JSON with this exact structure (no markdown, no extra keys, no citations like [1]):
+      // 3) Hours depreciation :contentReference[oaicite:19]{index=19}
+      let hoursAdjPct = null;
+      let hoursAdjUSD = 0;
+      if (inputs.hours !== null && inputs.equipmentTypeBucket && LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket]) {
+        const life = LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket].lifespan;
+        hoursAdjPct = hoursPenaltyPct(inputs.hours, life);
+        hoursAdjUSD = (base + safetyAdj + conditionAdjUSD) * (hoursAdjPct || 0);
+      } else {
+        // If hours missing, rules say flag for review when data unclear
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("Hours and/or equipment type not available: hours depreciation skipped; manual review recommended.");
+      }
+
+      // 4) Geographic multiplier :contentReference[oaicite:20]{index=20}
+      const region = inputs.region || "Mountain West";
+      const regionMult = REGION_MULTIPLIERS[region] ?? 1.00;
+      const geoAdjUSD = (base + safetyAdj) * (regionMult - 1.0);
+
+      // 5) Market factors: seasonal + saturation :contentReference[oaicite:21]{index=21}
+      const seasonPct = currentSeasonAdjustmentPct();
+      const seasonAdjUSD = (base + safetyAdj) * seasonPct;
+
+      const satPct = saturationPenaltyPct(inputs.inventoryCount);
+      let satAdjUSD = 0;
+      if (satPct !== null) {
+        satAdjUSD = (base + safetyAdj) * satPct;
+        if (inputs.inventoryCount > 6) {
+          decision = "FLAG";
+          flags.push("MANUAL_REVIEW");
+          notes.push("Inventory >6: critical saturation risk; manual review recommended.");
+        }
+      } else {
+        notes.push("Inventory count missing: saturation rule skipped.");
+      }
+
+      // 6) Distance-based transport adjustment :contentReference[oaicite:22]{index=22}
+      let distAdjUSD = 0;
+      const distAdj = distanceAdjustmentUSD(inputs.distanceMiles);
+      if (distAdj === null && inputs.distanceMiles !== null) {
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("Distance >800 miles: flagged for manual review (transport likely unprofitable).");
+      } else if (distAdj !== null) {
+        distAdjUSD = distAdj;
+      } else {
+        notes.push("Distance missing: transport adjustment skipped.");
+      }
+
+      // 7) Risk adjustments (USD) :contentReference[oaicite:23]{index=23}
+      let riskAdjUSD = inputs.riskAdjustmentsUSD ?? 0;
+      if (inputs.riskFlags?.includes("STRUCTURAL_DAMAGE")) {
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("Structural damage risk: decline or expert review recommended.");
+      }
+
+      // 8) Title adjustments (pct/usd)
+      const titlePctUSD = (base + safetyAdj) * (titleAdjPct || 0);
+
+      // --- Build values ---
+      // “Projected Retail” = base market (geo adjusted) (matches example structure where projected retail = base market) :contentReference[oaicite:24]{index=24}
+      const projectedRetailUSD = Math.max(0, Math.round((base + safetyAdj + geoAdjUSD)));
+
+      // Wholesale target (“our offer”) starts from: base + safety + geo + condition + hours + market factors + risk + title + distance
+      const wholesaleUSD_raw =
+        (base + safetyAdj + geoAdjUSD) +
+        conditionAdjUSD +
+        hoursAdjUSD +
+        seasonAdjUSD +
+        satAdjUSD +
+        riskAdjUSD +
+        titleAdjUSD +
+        titlePctUSD +
+        distAdjUSD;
+
+      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleUSD_raw));
+
+      // Deal analysis (if asking price known) :contentReference[oaicite:25]{index=25}
+      const asking = inputs.askingPriceUSD;
+      const recon = inputs.reconditioningUSD ?? null;
+
+      let transportCostUSD = null;
+      // We approximate transport cost from distance bucket (not perfect, but aligned with the same buckets)
+      if (inputs.distanceMiles !== null && !isNaN(inputs.distanceMiles)) {
+        if (inputs.distanceMiles <= 100) transportCostUSD = 650;
+        else if (inputs.distanceMiles <= 300) transportCostUSD = 1500;
+        else if (inputs.distanceMiles <= 500) transportCostUSD = 2750;
+        else if (inputs.distanceMiles <= 800) transportCostUSD = 4250;
+      }
+
+      let totalInvestmentUSD = null;
+      let netProfitUSD = null;
+      let profitMarginPct = null;
+
+      if (asking !== null) {
+        const tCost = transportCostUSD ?? 0;
+        const rCost = recon ?? 0;
+        totalInvestmentUSD = asking + tCost + rCost;
+        netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
+        profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
+      } else {
+        notes.push("Asking price missing: profit and priority score are limited.");
+      }
+
+      const score = priorityScore({
+        profitMarginPct,
+        absoluteProfitUSD: netProfitUSD,
+        confidencePct: inputs.aiConfidencePct ?? 0,
+        marketVelocityScore: inputs.marketVelocityScore ?? 50,
+        daysOnMarket: inputs.daysOnMarket
+      });
+
+      return {
+        decision,
+        notes,
+        flags,
+        breakdown: {
+          baseMarketValueUSD: Math.round(base),
+          safetyMarginAdjUSD: Math.round(safetyAdj),
+          geoRegion: region,
+          geoMultiplier: regionMult,
+          geoAdjUSD: Math.round(geoAdjUSD),
+          conditionTier: inputs.conditionTier || "Unknown",
+          conditionAdjUSD: Math.round(conditionAdjUSD),
+          hours: inputs.hours,
+          equipmentTypeBucket: inputs.equipmentTypeBucket || "Unknown",
+          hoursAdjPct: hoursAdjPct,
+          hoursAdjUSD: Math.round(hoursAdjUSD),
+          season: seasonName(),
+          seasonAdjUSD: Math.round(seasonAdjUSD),
+          inventoryCount: inputs.inventoryCount,
+          saturationAdjUSD: Math.round(satAdjUSD),
+          distanceMiles: inputs.distanceMiles,
+          distanceAdjUSD: Math.round(distAdjUSD),
+          titleStatus: inputs.titleStatus || "Unknown",
+          titleAdjUSD: Math.round(titleAdjUSD + titlePctUSD),
+          riskAdjUSD: Math.round(riskAdjUSD),
+          projectedRetailUSD,
+          wholesaleTargetUSD
+        },
+        deal: {
+          askingPriceUSD: asking,
+          transportCostUSD,
+          reconditioningUSD: recon,
+          totalInvestmentUSD,
+          netProfitUSD,
+          profitMarginPct,
+          priorityScore: score,
+          priorityTier: priorityTier(score)
+        }
+      };
+    }
+
+    // -------------------------
+    // LLM call + report rendering
+    // -------------------------
+    generateButton.addEventListener('click', async () => {
+      if (!API_KEY) { showMessage("API Key is missing. Please set your new API key.", 'error'); return; }
+      if (!isAuthReady) { showMessage("Database status unknown. Please wait a moment.", 'error'); return; }
+      if (!selectedFiles.length) { showMessage("Add at least one photo.", 'error'); return; }
+
+      showMessage("Generating report... analyzing photos and pulling grounded market data.", 'info');
+      generateButton.disabled = true;
+      downloadButton.classList.add('hidden');
+      reportContainer.style.display = 'none';
+      reportData = null;
+
+      originalFiles = [...selectedFiles];
+
+      try {
+        // Prepare images
+        showMessage("Step 1/3: preparing images...", 'info');
+        const resizedFiles = await Promise.all(originalFiles.map(f => resizeForModel(f)));
+
+        const base64Images = await Promise.all(resizedFiles.map(file => new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onloadend = () => {
+            const dataUrl = r.result;
+            const b64 = dataUrl.split(',')[1];
+            resolve({ data: b64, mimeType: 'image/jpeg' });
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        })));
+
+        // Gather optional user fields
+        const askingPriceUSD = safeNum(askingPriceEl.value);
+        const hours = safeNum(hoursEl.value);
+        const region = regionEl.value || null;
+        const distanceMiles = safeNum(distanceEl.value);
+        const daysOnMarket = safeNum(domEl.value);
+        const inventoryCount = safeNum(inventoryEl.value);
+        const titleStatus = titleEl.value || null;
+
+        const userNotes = (notesInput.value || "").trim();
+
+        // Prompt: force structured outputs so our rule engine can operate even when missing
+        showMessage("Step 2/3: calling model...", 'info');
+
+        const reportPrompt = `
+You are a heavy equipment inspector + valuation analyst for Bona Fide Iron.
+
+Your job:
+(1) Identify the equipment from photos.
+(2) Estimate a Base Market Value using real-time web grounding (Google Search tool).
+(3) Return clean JSON only (no markdown) in the exact schema below.
+
+IMPORTANT:
+- If a field cannot be determined from photos + notes + grounded search, set it to null (do not guess).
+- Values that are money must be NUMBERS in USD (no $, no commas, no ranges).
+- Provide "sourcesUsedCount" and "sourcesSpreadPct" based on the grounded research you performed.
+- "conditionAdjustmentsUSD" should be the total dollar adjustment from condition findings you observe.
+- "riskAdjustmentsUSD" should be the total dollar adjustment for major risks you observe or verify via grounding.
+- Include "riskFlags" as an array of strings when relevant (examples below).
+- Keep narrative sections short and professional.
+
+SCHEMA (return ONLY valid JSON):
 {
-  "modelGuess": "string",
-  "equipmentType": "string",
-  "identification": "string",
-  "productionEra": "string",
-  "features": "string",
-  "conditionNotes": "string",
-  "keySystems": {
-    "undercarriageOrTires": "string",
-    "hydraulicsAndLeaks": "string",
-    "engineCoolingElectrical": "string",
-    "cabControlsDisplays": "string",
-    "structureBoomBucketPins": "string"
+  "equipment": {
+    "category": "string (e.g., Excavator, Skid Steer, Dozer, Wheel Loader, Backhoe, Track Loader)",
+    "make": "string|null",
+    "model": "string|null",
+    "year": "number|null",
+    "serialNumber": "string|null",
+    "configuration": "string|null",
+    "attachments": "string|null"
   },
-  "recommendations": "string",
-  "disclaimer": "string",
-  "valuation": {
-    "estimatedRetailValueUSD": "string",
-    "valuationConfidence": "string"
-  }
+  "market": {
+    "baseMarketValueUSD": "number|null",
+    "sourcesUsedCount": "number|null",
+    "sourcesSpreadPct": "number|null",
+    "marketVelocityScore": "number|null"
+  },
+  "condition": {
+    "conditionTier": "string|null (Excellent|Good|Fair|Poor|Unknown)",
+    "conditionConfidencePct": "number|null",
+    "conditionFindings": "string|null",
+    "conditionAdjustmentsUSD": "number|null"
+  },
+  "hours": {
+    "reportedHours": "number|null",
+    "recentOverhaulWithin500hrs": "boolean|null"
+  },
+  "risks": {
+    "riskSummary": "string|null",
+    "riskFlags": "array (strings)",
+    "riskAdjustmentsUSD": "number|null"
+  },
+  "reconditioning": {
+    "estimatedReconditioningUSD": "number|null",
+    "reconditioningNotes": "string|null"
+  },
+  "disclaimer": "string"
 }
 
-CRITICAL:
-- estimatedRetailValueUSD must be a SINGLE number like "107000" with no $ and no commas and no ranges.
-- If you truly cannot estimate, use "Unknown".
+RISK FLAGS examples:
+- "ENGINE_ISSUES"
+- "HYDRAULIC_ISSUES"
+- "TRANSMISSION_ISSUES"
+- "STRUCTURAL_DAMAGE"
+- "ELECTRICAL_ISSUES"
+- "EMISSIONS_ISSUES"
+- "RECALL_ACTIVE"
+- "TITLE_PROBLEM"
 `;
 
-                const payload = {
-                    contents: [{
-                        parts: [
-                            { text: reportPrompt },
-                            { text: `User Notes: ${userNotes}` },
-                            ...base64Images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
-                        ]
-                    }],
-                    tools: [{ "google_search": {} }],
-                };
-
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    if (response.status === 503 && retries < MAX_RETRIES) {
-                        retries++;
-                        showMessage(`Model overloaded. Retrying... (${retries}/${MAX_RETRIES})`, 'info');
-                        await new Promise(res => setTimeout(res, 2000 * retries));
-                        return callApiWithRetry();
-                    }
-                    throw new Error(`API Error: ${response.status} - ${errorText}`);
-                }
-
-                const result = await response.json();
-                let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (!jsonText) {
-                    console.error("Empty model response:", result);
-                    throw new Error("Model returned empty response (often request size or image processing).");
-                }
-
-                let sources = [];
-                const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
-                if (groundingMetadata?.groundingAttributions) {
-                    sources = groundingMetadata.groundingAttributions
-                        .map(a => ({ uri: a.web?.uri, title: a.web?.title }))
-                        .filter(s => s.uri && s.title);
-                }
-
-                const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/);
-                if (jsonMatch) jsonText = jsonMatch[1].trim();
-                else {
-                    jsonText = jsonText.trim();
-                    const first = jsonText.indexOf('{');
-                    const last = jsonText.lastIndexOf('}');
-                    if (first !== -1 && last !== -1 && last > first) jsonText = jsonText.substring(first, last + 1);
-                }
-
-                let report;
-                try { report = JSON.parse(jsonText); }
-                catch (e) { console.error("Bad JSON:", jsonText); throw new Error("JSON parsing failed."); }
-
-                reportData = report;
-                reportData.sources = sources;
-
-                const retailStr = (report.valuation?.estimatedRetailValueUSD || "0").replace(/[$,]/g, '').trim();
-                const retailValue = parseFloat(retailStr);
-
-                let dealerOffer = 'N/A';
-                let projectedRetail = 'N/A';
-
-                if (!isNaN(retailValue) && retailValue > 0) {
-                    projectedRetail = retailValue.toFixed(2);
-                    const adjusted = retailValue * (1 - PRICE_ADJUSTMENT_PERCENTAGE);
-                    dealerOffer = adjusted.toFixed(2);
-                }
-
-                const ks = report.keySystems || {};
-
-                reportContent.innerHTML = `
-                    <div class="p-4 bg-gray-50 rounded-lg">
-                        <p class="font-bold">Model Guess:</p>
-                        <p>${report.modelGuess || "Unknown"}</p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Equipment Type</h3>
-                        <p class="text-gray-700">${report.equipmentType || "Unknown"}</p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Identification</h3>
-                        <p class="text-gray-700">${report.identification || "Unknown"}</p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Production Era</h3>
-                        <p class="text-gray-700">${report.productionEra || "Unknown"}</p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Features</h3>
-                        <p class="text-gray-700">${report.features || "Unknown"}</p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Valuation</h3>
-                        <div class="mt-2 space-y-3 p-4 border rounded-xl bg-green-50">
-                            <div class="flex justify-between font-medium text-gray-700">
-                                <span class="text-blue-700">Dealer Purchase Offer:</span>
-                                <span class="text-blue-700 font-bold no-break">$${dealerOffer}</span>
-                            </div>
-                            <div class="flex justify-between font-medium text-gray-700 border-t pt-3 mt-3">
-                                <span>Estimated Retail / Asking:</span>
-                                <span class="text-green-700 font-bold no-break">$${projectedRetail}</span>
-                            </div>
-                        </div>
-                        <div class="mt-4 text-sm text-gray-600">
-                            <strong>Confidence Level:</strong>
-                            <span class="font-semibold text-gray-800">${report.valuation?.valuationConfidence || "Unknown"}</span>
-                        </div>
-                        <p class="mt-2 text-xs text-gray-500">
-                            *Sources (if any) are included on the final PDF page.
-                        </p>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Condition Notes</h3>
-                        <p class="text-gray-700">${report.conditionNotes || "Unknown"}</p>
-                    </div>
-
-                    <div class="p-4 bg-gray-50 rounded-lg space-y-2">
-                        <div><span class="font-semibold">Undercarriage/Tires:</span> ${ks.undercarriageOrTires || "Unknown"}</div>
-                        <div><span class="font-semibold">Hydraulics/Leaks:</span> ${ks.hydraulicsAndLeaks || "Unknown"}</div>
-                        <div><span class="font-semibold">Engine/Cooling/Electrical:</span> ${ks.engineCoolingElectrical || "Unknown"}</div>
-                        <div><span class="font-semibold">Cab/Controls/Displays:</span> ${ks.cabControlsDisplays || "Unknown"}</div>
-                        <div><span class="font-semibold">Structure/Boom/Bucket/Pins:</span> ${ks.structureBoomBucketPins || "Unknown"}</div>
-                    </div>
-
-                    <div>
-                        <h3 class="font-semibold text-lg text-gray-800">Recommendations</h3>
-                        <p class="text-gray-700">${report.recommendations || "Unknown"}</p>
-                    </div>
-
-                    <div class="p-4 mt-4 bg-yellow-50 text-sm text-yellow-800 rounded-lg">
-                        <p><strong>Disclaimer:</strong> ${report.disclaimer || "This report is based on photos only and is not a substitute for an in-person inspection."}</p>
-                    </div>
-                `;
-
-                reportContainer.style.display = 'block';
-                downloadButton.classList.remove('hidden');
-                showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
-
-                if (isAuthReady && db) {
-                    try {
-                        const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
-                        await setDoc(reportRef, report);
-                    } catch (dbError) {
-                        console.error("Firestore save failed:", dbError);
-                        showMessage("Report generated, but failed to save to database.", 'warning');
-                    }
-                }
-
-            } catch (error) {
-                console.error("Report generation error:", error);
-                showMessage(`Failed to generate report: ${error.message}`, 'error');
-                reportData = null;
-                await resetUIAndResources();
-            } finally {
-                generateButton.disabled = false;
-            }
-        }
-
-        callApiWithRetry();
-    });
-
-    downloadButton.addEventListener('click', async () => {
-        const { jsPDF } = window.jspdf;
-        const reportElement = document.getElementById('report-container');
-
-        showMessage("Preparing PDF for download...", 'info');
-        downloadButton.disabled = true;
-
-        const addFooter = (doc, margin, pageHeight) => {
-            doc.setFontSize(8);
-            doc.setTextColor(150);
-            doc.setFont("helvetica", "normal");
-            const footerText = "Bona Fide Iron | WWW.Ludditelearning.com";
-            doc.text(footerText, margin, pageHeight - 5);
+        const payload = {
+          contents: [{
+            parts: [
+              { text: reportPrompt },
+              { text: `User-entered listing fields (may be null): askingPriceUSD=${askingPriceUSD}, region=${region}, distanceMiles=${distanceMiles}, daysOnMarket=${daysOnMarket}, inventoryCountSameModel=${inventoryCount}, titleStatus=${titleStatus}` },
+              { text: `User Notes: ${userNotes}` },
+              ...base64Images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
+            ]
+          }],
+          tools: [{ "google_search": {} }]
         };
 
-        try {
-            const modelGuess = reportData?.modelGuess || 'Unknown_Equipment';
-            const dateString = new Date().toISOString().split('T')[0];
-            const sanitizedFilename = modelGuess.replace(/[/\s]+/g, '_') + '_' + dateString + '_Equipment_Report.pdf';
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+        const resp = await fetch(apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
 
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 10;
-
-            const reportCanvas = await html2canvas(reportElement, { scale: 3, width: reportElement.offsetWidth });
-            const reportImgData = reportCanvas.toDataURL('image/jpeg', 0.95);
-
-            const reportRatio = reportCanvas.width / reportCanvas.height;
-            const reportPdfWidth = pageWidth - margin * 2;
-            const reportPdfHeight = reportPdfWidth / reportRatio;
-
-            doc.addImage(reportImgData, 'JPEG', margin, margin, reportPdfWidth, reportPdfHeight);
-            addFooter(doc, margin, pageHeight);
-
-            if (originalFiles.length > 0) {
-                doc.addPage();
-                let y = margin;
-
-                doc.setFontSize(16);
-                doc.setTextColor(0);
-                doc.text("Reference Images", margin, y);
-                y += 8;
-                addFooter(doc, margin, pageHeight);
-
-                const imagePadding = 6;
-                let rowMaxHeight = 0;
-
-                for (let i = 0; i < originalFiles.length; i++) {
-                    const file = originalFiles[i];
-                    const { dataUrl, width, height } = await fileToCompressedJpegDataUrl(file);
-
-                    const imgRatio = width / height;
-                    const imgPdfHeight = PDF_IMAGE_WIDTH_MM / imgRatio;
-
-                    if (i % 2 === 0) {
-                        if (i > 0) y += rowMaxHeight + imagePadding;
-                        rowMaxHeight = 0;
-
-                        if (y + imgPdfHeight > pageHeight - margin - 10) {
-                            doc.addPage();
-                            y = margin;
-
-                            doc.setFontSize(16);
-                            doc.text("Reference Images (Cont.)", margin, y);
-                            y += 8;
-                            addFooter(doc, margin, pageHeight);
-                        }
-                    }
-
-                    const x = (i % 2 === 0) ? margin : (margin + PDF_IMAGE_WIDTH_MM + imagePadding);
-                    rowMaxHeight = Math.max(rowMaxHeight, imgPdfHeight);
-
-                    doc.addImage(dataUrl, 'JPEG', x, y, PDF_IMAGE_WIDTH_MM, imgPdfHeight);
-                }
-                addFooter(doc, margin, pageHeight);
-            }
-
-            // Sources page
-            doc.addPage();
-            let y2 = margin;
-            doc.setFontSize(16);
-            doc.setTextColor(0);
-            doc.text("Sources (if available)", margin, y2);
-            y2 += 10;
-
-            doc.setFontSize(10);
-            doc.setTextColor(50);
-            doc.setFont("helvetica", "normal");
-
-            let sources = reportData?.sources || [];
-            if (!sources.length) {
-                sources = [{ title: "Google Search Grounding", uri: "No specific links returned by the model for this run." }];
-            }
-
-            const bodyWidth = pageWidth - margin * 2;
-            sources.forEach((s, idx) => {
-                const line = `${idx + 1}. ${s.title} (${s.uri})`;
-                const lines = doc.splitTextToSize(line, bodyWidth);
-                if (y2 + lines.length * 4.5 > pageHeight - margin - 10) {
-                    doc.addPage();
-                    y2 = margin;
-                    addFooter(doc, margin, pageHeight);
-                }
-                doc.text(lines, margin, y2);
-                y2 += lines.length * 4.5;
-            });
-
-            addFooter(doc, margin, pageHeight);
-
-            doc.save(sanitizedFilename);
-            showMessage("PDF download started!", 'info');
-        } catch (error) {
-            console.error("PDF generation failed:", error);
-            showMessage("Failed to generate PDF. Please try again.", 'error');
-        } finally {
-            downloadButton.disabled = false;
+        if (!resp.ok) {
+          const t = await resp.text();
+          throw new Error(`API Error ${resp.status}: ${t}`);
         }
+
+        const result = await resp.json();
+        let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error("Model returned empty response.");
+
+        // Extract grounding sources (optional)
+        let sources = [];
+        const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
+        if (groundingMetadata?.groundingAttributions) {
+          sources = groundingMetadata.groundingAttributions
+            .map(a => ({ uri: a.web?.uri, title: a.web?.title }))
+            .filter(s => s.uri && s.title);
+        }
+
+        // Parse JSON strictly
+        jsonText = jsonText.trim();
+        const firstBrace = jsonText.indexOf('{');
+        const lastBrace = jsonText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) jsonText = jsonText.slice(firstBrace, lastBrace+1);
+
+        let report;
+        try { report = JSON.parse(jsonText); }
+        catch (e) { console.error("Bad JSON:", jsonText); throw new Error("JSON parsing failed (model returned malformed JSON)."); }
+
+        report.sources = sources;
+
+        // Build rule inputs for engine
+        const category = report?.equipment?.category || null;
+
+        // Map to our rule buckets
+        function mapBucket(cat) {
+          if (!cat) return null;
+          const c = cat.toLowerCase();
+          if (c.includes("excavator")) return "Excavator (standard)";
+          if (c.includes("dozer")) return "Dozer";
+          if (c.includes("wheel") && c.includes("loader")) return "Wheel loader";
+          if (c.includes("track") && c.includes("loader")) return "Track loader";
+          if (c.includes("backhoe")) return "Backhoe";
+          if (c.includes("skid")) return "Skid steer";
+          return null;
+        }
+
+        const engineInputs = {
+          baseMarketValueUSD: safeNum(report?.market?.baseMarketValueUSD),
+          sourcesUsedCount: safeNum(report?.market?.sourcesUsedCount),
+          sourcesSpreadPct: safeNum(report?.market?.sourcesSpreadPct),
+          conditionTier: report?.condition?.conditionTier || null,
+          conditionConfidencePct: safeNum(report?.condition?.conditionConfidencePct),
+          conditionAdjustmentsUSD: safeNum(report?.condition?.conditionAdjustmentsUSD),
+          equipmentTypeBucket: mapBucket(category),
+          hours: hours ?? safeNum(report?.hours?.reportedHours),
+          region: region ?? null,
+          distanceMiles,
+          inventoryCount,
+          daysOnMarket,
+          titleStatus,
+          reconditioningUSD: safeNum(report?.reconditioning?.estimatedReconditioningUSD),
+          riskAdjustmentsUSD: safeNum(report?.risks?.riskAdjustmentsUSD),
+          riskFlags: Array.isArray(report?.risks?.riskFlags) ? report.risks.riskFlags : [],
+          marketVelocityScore: safeNum(report?.market?.marketVelocityScore),
+          aiConfidencePct: safeNum(report?.condition?.conditionConfidencePct) ?? 0,
+          askingPriceUSD
+        };
+
+        const computed = computeBFIValuation(engineInputs);
+
+        // Store combined report
+        reportData = { raw: report, computed };
+
+        // Render report
+        reportMeta.textContent = `Generated: ${new Date().toLocaleString()} • Season: ${seasonName()} • Decision: ${computed.decision}`;
+
+        const b = computed.breakdown;
+        const d = computed.deal;
+
+        const declineBanner = computed.decision === "DECLINE"
+          ? `<div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">
+              <div class="font-bold text-lg">DECLINE</div>
+              <div class="text-sm">Title/documentation rules triggered a decline decision.</div>
+            </div>`
+          : "";
+
+        const flagBanner = computed.decision === "FLAG"
+          ? `<div class="p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-900">
+              <div class="font-bold text-lg">Manual Review Recommended</div>
+              <div class="text-sm">One or more rule gates were triggered (limited data, high variance, missing inputs, distance >800, etc.).</div>
+            </div>`
+          : "";
+
+        const sourcesHtml = (report.sources && report.sources.length)
+          ? `<div class="text-xs text-gray-500 space-y-1">
+              <div class="font-semibold text-gray-700">Grounded Sources (from model):</div>
+              ${report.sources.slice(0,8).map(s => `<div>• ${s.title}</div>`).join('')}
+            </div>`
+          : `<div class="text-xs text-gray-500">No source metadata returned by the model.</div>`;
+
+        const notesList = (computed.notes && computed.notes.length)
+          ? `<ul class="list-disc pl-5 text-sm text-gray-700 space-y-1">${computed.notes.map(n => `<li>${n}</li>`).join('')}</ul>`
+          : `<div class="text-sm text-gray-600">No additional notes.</div>`;
+
+        const idBlock = `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-4 bg-gray-50 rounded-xl">
+              <div class="text-sm text-gray-500">Equipment</div>
+              <div class="text-lg font-bold text-gray-900">${(report.equipment?.year ?? "Year?")} ${(report.equipment?.make ?? "Make?")} ${(report.equipment?.model ?? "Model?")}</div>
+              <div class="text-sm text-gray-700">${report.equipment?.category ?? "Category?"}${report.equipment?.configuration ? " • " + report.equipment.configuration : ""}</div>
+              <div class="text-xs text-gray-500 mt-2">Serial: ${report.equipment?.serialNumber ?? "Unknown"}</div>
+              <div class="text-xs text-gray-500">Attachments: ${report.equipment?.attachments ?? "Unknown"}</div>
+            </div>
+
+            <div class="p-4 bg-gray-50 rounded-xl">
+              <div class="text-sm text-gray-500">Condition</div>
+              <div class="text-lg font-bold text-gray-900">${report.condition?.conditionTier ?? "Unknown"}</div>
+              <div class="text-sm text-gray-700">${report.condition?.conditionFindings ?? "No condition notes provided."}</div>
+              <div class="text-xs text-gray-500 mt-2">Condition confidence: ${report.condition?.conditionConfidencePct ?? "N/A"}%</div>
+            </div>
+          </div>
+        `;
+
+        const valuationBlock = `
+          <div class="p-4 rounded-2xl border bg-green-50">
+            <div class="text-lg font-bold text-gray-900 mb-2">Valuation Summary</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="flex justify-between">
+                <span class="text-gray-700">Projected Retail (market)</span>
+                <span class="font-bold text-green-700 no-break">${fmtUSD(b.projectedRetailUSD)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-700">Wholesale Target (our offer)</span>
+                <span class="font-bold text-blue-700 no-break">${fmtUSD(b.wholesaleTargetUSD)}</span>
+              </div>
+            </div>
+            <div class="text-xs text-gray-600 mt-2">
+              Retail tracks base market value; offer reflects BFI rule adjustments (condition, hours, geo, season, saturation, risk, transport).
+            </div>
+          </div>
+        `;
+
+        const breakdownTable = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-3">Valuation Breakdown (Rule Engine)</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <div class="flex justify-between"><span>Base Market Value</span><span class="font-semibold">${fmtUSD(b.baseMarketValueUSD)}</span></div>
+              <div class="flex justify-between"><span>Safety Margin (limited data)</span><span class="font-semibold">${fmtUSD(b.safetyMarginAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Geo Region / Multiplier</span><span class="font-semibold">${b.geoRegion} (${b.geoMultiplier})</span></div>
+              <div class="flex justify-between"><span>Geo Adjustment</span><span class="font-semibold">${fmtUSD(b.geoAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Condition Tier</span><span class="font-semibold">${b.conditionTier}</span></div>
+              <div class="flex justify-between"><span>Condition Adjustment</span><span class="font-semibold">${fmtUSD(b.conditionAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Hours / Type</span><span class="font-semibold">${b.hours ?? "Unknown"} / ${b.equipmentTypeBucket}</span></div>
+              <div class="flex justify-between"><span>Hours Adjustment</span><span class="font-semibold">${(b.hoursAdjPct===null ? "N/A" : Math.round(b.hoursAdjPct*100)+"%")} (${fmtUSD(b.hoursAdjUSD)})</span></div>
+
+              <div class="flex justify-between"><span>Season</span><span class="font-semibold">${b.season}</span></div>
+              <div class="flex justify-between"><span>Season Adjustment</span><span class="font-semibold">${fmtUSD(b.seasonAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Inventory (same model)</span><span class="font-semibold">${b.inventoryCount ?? "Unknown"}</span></div>
+              <div class="flex justify-between"><span>Saturation Adjustment</span><span class="font-semibold">${fmtUSD(b.saturationAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Distance (mi)</span><span class="font-semibold">${b.distanceMiles ?? "Unknown"}</span></div>
+              <div class="flex justify-between"><span>Distance Adjustment</span><span class="font-semibold">${fmtUSD(b.distanceAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Title Status</span><span class="font-semibold">${b.titleStatus}</span></div>
+              <div class="flex justify-between"><span>Title Adjustment</span><span class="font-semibold">${fmtUSD(b.titleAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Risk Adjustments</span><span class="font-semibold">${fmtUSD(b.riskAdjUSD)}</span></div>
+              <div class="flex justify-between"><span class="font-bold">Wholesale Target</span><span class="font-bold">${fmtUSD(b.wholesaleTargetUSD)}</span></div>
+            </div>
+          </div>
+        `;
+
+        const dealBlock = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-3">Deal Analysis</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <div class="flex justify-between"><span>Seller Asking</span><span class="font-semibold">${fmtUSD(d.askingPriceUSD)}</span></div>
+              <div class="flex justify-between"><span>Transport Cost</span><span class="font-semibold">${fmtUSD(d.transportCostUSD)}</span></div>
+              <div class="flex justify-between"><span>Reconditioning</span><span class="font-semibold">${fmtUSD(d.reconditioningUSD)}</span></div>
+              <div class="flex justify-between"><span>Total Investment</span><span class="font-semibold">${fmtUSD(d.totalInvestmentUSD)}</span></div>
+              <div class="flex justify-between"><span>Projected Retail</span><span class="font-semibold">${fmtUSD(b.projectedRetailUSD)}</span></div>
+              <div class="flex justify-between"><span>Net Profit</span><span class="font-semibold">${fmtUSD(d.netProfitUSD)}</span></div>
+              <div class="flex justify-between"><span>Profit Margin</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
+              <div class="flex justify-between"><span>Priority</span><span class="font-bold">${d.priorityScore ?? "N/A"} — ${d.priorityTier ?? ""}</span></div>
+            </div>
+            <div class="text-xs text-gray-500 mt-2">
+              Priority weights: margin 40%, profit 30%, confidence 15%, velocity 10%, days-on-market 5%.
+            </div>
+          </div>
+        `;
+
+        const riskBlock = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-2">Risks & Notes</div>
+            <div class="text-sm text-gray-700">${report.risks?.riskSummary ?? "No risk summary provided."}</div>
+            <div class="mt-2">${notesList}</div>
+          </div>
+        `;
+
+        const disclaimerBlock = `
+          <div class="p-4 mt-2 bg-yellow-50 text-sm text-yellow-900 rounded-xl border border-yellow-100">
+            <strong>Disclaimer:</strong> ${report.disclaimer ?? "This report is an estimate based on photos, notes, and grounded market data. Verify condition, title, and hours before purchase."}
+          </div>
+        `;
+
+        reportContent.innerHTML = `
+          ${declineBanner}
+          ${flagBanner}
+          ${idBlock}
+          ${valuationBlock}
+          ${breakdownTable}
+          ${dealBlock}
+          ${riskBlock}
+          <div class="p-4 rounded-2xl border bg-gray-50">${sourcesHtml}</div>
+          ${disclaimerBlock}
+        `;
+
+        reportContainer.style.display = 'block';
+        downloadButton.classList.remove('hidden');
+
+        showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
+
+        // Save to Firestore
+        if (db && userId) {
+          try {
+            const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
+            await setDoc(reportRef, reportData);
+          } catch (e) {
+            console.error("Save failed:", e);
+            showMessage("Report generated, but failed to save to database.", 'warning');
+          }
+        }
+
+      } catch (err) {
+        console.error(err);
+        showMessage(`Failed to generate report: ${err.message}`, 'error');
+        reportData = null;
+      } finally {
+        generateButton.disabled = false;
+      }
     });
 
-    toggleGenerateButton();
-</script>
+    // -------------------------
+    // PDF download
+    // -------------------------
+    downloadButton.addEventListener('click', async () => {
+      const { jsPDF } = window.jspdf;
+      const reportElement = document.getElementById('report-container');
+      if (!reportData) { showMessage("No report to download yet.", 'error'); return; }
+
+      showMessage("Preparing PDF for download...", 'info');
+      downloadButton.disabled = true;
+
+      const addFooter = (doc, margin, pageHeight) => {
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.setFont("helvetica", "normal");
+        doc.text("BonaFideIron.com", margin, pageHeight - 5);
+      };
+
+      try {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+
+        // Page 1: Report content
+        const canvas = await html2canvas(reportElement, { scale: 2 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const imgW = pageWidth - margin * 2;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        doc.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
+        addFooter(doc, margin, pageHeight);
+
+        // Reference Images pages (smaller + lower-res)
+        if (originalFiles.length) {
+          doc.addPage();
+          let y = margin;
+          doc.setFontSize(16);
+          doc.setTextColor(0);
+          doc.text("Reference Images", margin, y);
+          y += 10;
+          addFooter(doc, margin, pageHeight);
+
+          const imgTargetWidthMm = 76; // ~3 inches
+          const pad = 6;
+          const col2x = margin + imgTargetWidthMm + pad;
+
+          for (let i = 0; i < originalFiles.length; i++) {
+            const file = originalFiles[i];
+            const r = new FileReader();
+            r.readAsDataURL(file);
+            await new Promise(res => r.onloadend = res);
+
+            // lower-res in PDF
+            const url = r.result;
+
+            // Try to estimate height using an Image object
+            const img = new Image();
+            img.src = url;
+            await new Promise(res => img.onload = res);
+            const hMm = imgTargetWidthMm * (img.height / img.width);
+
+            // new row every 2 images
+            const isLeft = (i % 2 === 0);
+            const x = isLeft ? margin : col2x;
+
+            if (isLeft && i > 0) y += hMm + pad;
+
+            // page break
+            if (y + hMm > pageHeight - margin - 10) {
+              doc.addPage();
+              y = margin;
+              doc.setFontSize(16);
+              doc.text("Reference Images (Cont.)", margin, y);
+              y += 10;
+              addFooter(doc, margin, pageHeight);
+            }
+
+            doc.addImage(url, 'JPEG', x, y, imgTargetWidthMm, hMm, undefined, 'FAST');
+
+            // if right column, don't advance; next left handles row advance
+            if (!isLeft) {
+              // keep y for next row advance
+            }
+          }
+        }
+
+        const make = reportData?.raw?.equipment?.make ?? "Equipment";
+        const model = reportData?.raw?.equipment?.model ?? "Report";
+        const dateStr = new Date().toISOString().split('T')[0];
+        const fname = `${String(make).replace(/\s+/g,'_')}_${String(model).replace(/\s+/g,'_')}_${dateStr}_BFI_Report.pdf`;
+
+        doc.save(fname);
+        showMessage("PDF download started!", 'info');
+      } catch (e) {
+        console.error(e);
+        showMessage("Failed to generate PDF. Please try again.", 'error');
+      } finally {
+        downloadButton.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
