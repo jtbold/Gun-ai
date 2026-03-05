@@ -189,27 +189,38 @@
       "Northeast": 0.985
     };
 
-    // FIX #2: State-based distance estimates for automatic transport calculation
+    // FIX #2: Region-based distance estimates with realistic 2026 transport costs
+    const REGION_TRANSPORT = {
+      "Mountain West": { distance: 450, cost: 2150, rate: 4.75 },
+      "Texas/Oklahoma": { distance: 1800, cost: 6300, rate: 3.50 },
+      "California": { distance: 3000, cost: 11550, rate: 3.85 },
+      "Pacific Northwest": { distance: 3300, cost: 12375, rate: 3.75 },
+      "Midwest": { distance: 2100, cost: 7560, rate: 3.60 },
+      "Southeast": { distance: 3900, cost: 13260, rate: 3.40 },
+      "Northeast": { distance: 4800, cost: 17520, rate: 3.65 }
+    };
+
+    // FIX #2: State-based distance estimates for automatic transport calculation (3x multiplier)
     const STATE_DISTANCES_FROM_DENVER = {
-      'colorado': 50, 'wyoming': 200, 'montana': 600, 
-      'texas': 650, 'oklahoma': 500, 'kansas': 400,
-      'nebraska': 350, 'new mexico': 350, 'utah': 400,
-      'arizona': 600, 'california': 1000, 'nevada': 750,
-      'idaho': 600, 'oregon': 1100, 'washington': 1200,
-      'north dakota': 700, 'south dakota': 450,
-      'minnesota': 800, 'iowa': 600, 'missouri': 600,
-      'arkansas': 750, 'louisiana': 950,
-      'wisconsin': 900, 'illinois': 900, 'indiana': 1000,
-      'michigan': 1100, 'ohio': 1200,
-      'kentucky': 1100, 'tennessee': 1100, 'alabama': 1300,
-      'mississippi': 1200, 'georgia': 1400, 'florida': 1700,
-      'south carolina': 1500, 'north carolina': 1500,
-      'virginia': 1500, 'west virginia': 1400,
-      'pennsylvania': 1500, 'new york': 1700,
-      'vermont': 1800, 'new hampshire': 1800,
-      'maine': 2000, 'massachusetts': 1800,
-      'rhode island': 1800, 'connecticut': 1700,
-      'new jersey': 1700, 'delaware': 1600, 'maryland': 1500
+      'colorado': 150, 'wyoming': 600, 'montana': 1800, 
+      'texas': 1950, 'oklahoma': 1500, 'kansas': 1200,
+      'nebraska': 1050, 'new mexico': 1050, 'utah': 1200,
+      'arizona': 1800, 'california': 3000, 'nevada': 2250,
+      'idaho': 1800, 'oregon': 3300, 'washington': 3600,
+      'north dakota': 2100, 'south dakota': 1350,
+      'minnesota': 2400, 'iowa': 1800, 'missouri': 1800,
+      'arkansas': 2250, 'louisiana': 2850,
+      'wisconsin': 2700, 'illinois': 2700, 'indiana': 3000,
+      'michigan': 3300, 'ohio': 3600,
+      'kentucky': 3300, 'tennessee': 3300, 'alabama': 3900,
+      'mississippi': 3600, 'georgia': 4200, 'florida': 5100,
+      'south carolina': 4500, 'north carolina': 4500,
+      'virginia': 4500, 'west virginia': 4200,
+      'pennsylvania': 4500, 'new york': 5100,
+      'vermont': 5400, 'new hampshire': 5400,
+      'maine': 6000, 'massachusetts': 5400,
+      'rhode island': 5400, 'connecticut': 5100,
+      'new jersey': 5100, 'delaware': 4800, 'maryland': 4500
     };
 
     function estimateDistanceFromLocation(location) {
@@ -223,11 +234,9 @@
 
     function distanceAdjustmentUSD(distanceMiles) {
       if (distanceMiles === null || distanceMiles === undefined || isNaN(distanceMiles)) return null;
-      if (distanceMiles <= 100) return -650;
-      if (distanceMiles <= 300) return -1500;
-      if (distanceMiles <= 500) return -2750;
-      if (distanceMiles <= 800) return -4250;
-      return null;
+      // Use average rate of $3.75/mile (negative adjustment to wholesale value)
+      const avgRate = -3.75;
+      return Math.round(distanceMiles * avgRate);
     }
 
     function currentSeasonAdjustmentPct() {
@@ -624,18 +633,22 @@
 
       let distAdjUSD = 0;
       const distAdj = distanceAdjustmentUSD(inputs.distanceMiles);
-      if (distAdj === null && inputs.distanceMiles !== null) {
+      if (inputs.distanceMiles !== null && inputs.distanceMiles > 5000) {
         decision = "FLAG"; flags.push("MANUAL_REVIEW");
-        notes.push("Distance >800 miles: manual review recommended (transport risk).");
-      } else if (distAdj !== null) {
+        notes.push("Distance >5000 miles: manual review recommended (extreme transport risk/cost).");
+      }
+      if (distAdj !== null) {
         distAdjUSD = distAdj;
-      } else {
-        // FIX #2: Note if distance was estimated vs missing
-        if (inputs.distanceSource === "estimated") {
-          notes.push(`Distance estimated from location (~${inputs.distanceMiles} miles): transport adjustment applied.`);
-        } else {
-          notes.push("Distance missing: transport adjustment skipped.");
+        // FIX #2: Note transport cost calculation method
+        if (inputs.regionTransportCost) {
+          notes.push(`Transport cost based on ${inputs.region} region rate ($${inputs.regionTransportCost.toLocaleString()}).`);
+        } else if (inputs.distanceSource === "region-estimated") {
+          notes.push(`Distance estimated from region (${inputs.distanceMiles} miles): transport calculated at $3.75/mile average.`);
+        } else if (inputs.distanceSource === "location-estimated") {
+          notes.push(`Distance estimated from location (~${inputs.distanceMiles} miles): transport calculated at $3.75/mile average.`);
         }
+      } else {
+        notes.push("Distance missing: transport adjustment skipped.");
       }
 
       const riskAdjUSD = inputs.riskAdjustmentsUSD ?? 0;
@@ -665,13 +678,16 @@
       const recon = inputs.reconditioningUSD ?? null;
 
       let transportCostUSD = null;
-      if (inputs.distanceMiles !== null && !isNaN(inputs.distanceMiles)) {
-        if (inputs.distanceMiles <= 100) transportCostUSD = 650;
-        else if (inputs.distanceMiles <= 300) transportCostUSD = 1500;
-        else if (inputs.distanceMiles <= 500) transportCostUSD = 2750;
-        else if (inputs.distanceMiles <= 800) transportCostUSD = 4250;
-        // FIX #2: Add estimated transport for >800mi instead of null
-        else transportCostUSD = 5000;  // Estimate for very far locations
+      
+      // FIX #2: Use region-specific transport cost if available (most accurate)
+      if (inputs.regionTransportCost !== null && inputs.regionTransportCost !== undefined) {
+        transportCostUSD = inputs.regionTransportCost;
+      }
+      // Otherwise calculate from distance using realistic 2026 per-mile rates
+      else if (inputs.distanceMiles !== null && !isNaN(inputs.distanceMiles)) {
+        // Use average rate of $3.75/mile for manual distance calculations
+        const avgRate = 3.75;
+        transportCostUSD = Math.round(inputs.distanceMiles * avgRate);
       }
 
       let totalInvestmentUSD = null;
@@ -778,6 +794,15 @@
         const daysOnMarket = safeNum(domEl.value);
         const inventoryCount = safeNum(inventoryEl.value);
         const titleStatus = titleEl.value || null;
+
+        // FIX #2: If no manual distance but region is selected, use region-based estimate
+        let distanceSource = "manual";
+        let regionTransportCost = null;  // Store region-specific transport cost
+        if (distanceMiles === null && region && REGION_TRANSPORT[region]) {
+          distanceMiles = REGION_TRANSPORT[region].distance;
+          regionTransportCost = REGION_TRANSPORT[region].cost;
+          distanceSource = "region-estimated";
+        }
 
         const userNotes = (notesInput.value || "").trim();
 
@@ -921,8 +946,13 @@ RISK FLAGS examples:
         report.sources = sources;
 
         // Decide final asking/hours: user-entered wins; otherwise use listing extraction if confident enough
-        const modelAsking = safeNum(report?.listing?.askingPriceUSD);
+        let modelAsking = safeNum(report?.listing?.askingPriceUSD);
         const modelHours = safeNum(report?.listing?.hours) ?? safeNum(report?.hours?.reportedHours);
+
+        // FIX #1: CRITICAL - Reject $0 asking prices from AI extraction
+        if (modelAsking === 0 || (report?.listing?.askingPriceUSD !== null && report?.listing?.askingPriceUSD <= 0)) {
+          modelAsking = null;  // Treat $0 as missing data
+        }
 
         const listingConfidence = (report?.listing?.listingExtractionConfidence || "").toLowerCase();
         const allowListingFill = (listingConfidence === "high" || listingConfidence === "medium");
@@ -930,14 +960,13 @@ RISK FLAGS examples:
         const finalAsking = (userAsking !== null) ? userAsking : (allowListingFill ? modelAsking : null);
         const finalHours = (userHours !== null) ? userHours : (allowListingFill ? modelHours : null);
 
-        // FIX #2: Auto-calculate distance from extracted location if not provided
+        // FIX #2: Auto-calculate distance from extracted location if still no distance
         const extractedLocation = report?.listing?.location || null;
-        let distanceSource = "manual";
         if (distanceMiles === null && extractedLocation) {
           const estimated = estimateDistanceFromLocation(extractedLocation);
           if (estimated !== null) {
             distanceMiles = estimated;
-            distanceSource = "estimated";
+            distanceSource = "location-estimated";
           }
         }
 
@@ -988,6 +1017,7 @@ RISK FLAGS examples:
           region: region ?? null,
           distanceMiles,
           distanceSource,  // FIX #2: Track whether distance was estimated
+          regionTransportCost,  // FIX #2: Region-specific transport cost
           inventoryCount,
           daysOnMarket,
           titleStatus,
@@ -1056,6 +1086,7 @@ RISK FLAGS examples:
               </div>
               <div class="text-xs text-gray-500 mt-2">
                 If extracted values are missing or low-confidence, enter them manually for best results.
+                ${modelAsking === null && report.listing?.askingPriceUSD === 0 ? '<span class="text-orange-600 font-semibold">⚠️ AI extracted $0 asking price (rejected as invalid).</span>' : ''}
               </div>
             </div>
           </div>
@@ -1121,7 +1152,7 @@ RISK FLAGS examples:
               <div class="flex justify-between"><span>Inventory (same model)</span><span class="font-semibold">${b.inventoryCount ?? "Unknown"}</span></div>
               <div class="flex justify-between"><span>Saturation Adjustment</span><span class="font-semibold">${fmtUSD(b.saturationAdjUSD)}</span></div>
 
-              <div class="flex justify-between"><span>Distance (mi)</span><span class="font-semibold">${b.distanceMiles ?? "Unknown"}${distanceSource === "estimated" ? " (est)" : ""}</span></div>
+              <div class="flex justify-between"><span>Distance (mi)</span><span class="font-semibold">${b.distanceMiles ?? "Unknown"}${distanceSource === "region-estimated" ? " (region)" : distanceSource === "location-estimated" ? " (loc)" : ""}</span></div>
               <div class="flex justify-between"><span>Distance Adjustment</span><span class="font-semibold">${fmtUSD(b.distanceAdjUSD)}</span></div>
 
               <div class="flex justify-between"><span>Title Status</span><span class="font-semibold">${b.titleStatus}</span></div>
