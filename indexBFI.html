@@ -670,13 +670,24 @@
         satAdjUSD
       ));
 
-      // Wholesale = retail value minus our costs (distance, risk, title issues)
-      const wholesaleRaw = projectedRetailUSD + distAdjUSD + riskAdjUSD + titleAdjUSD + titlePctUSD;
-
-      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleRaw));
-
       const asking = inputs.askingPriceUSD;
       const recon = inputs.reconditioningUSD ?? null;
+
+      // Wholesale = retail value minus ALL our costs (transport, recon, risks, title) and desired profit margin
+      // Target profit margin: 10% of retail value
+      const targetProfitMarginUSD = Math.round(projectedRetailUSD * 0.10);
+      const reconAdjUSD = recon ? -recon : 0;  // Reconditioning is a cost (negative)
+      
+      const wholesaleRaw = 
+        projectedRetailUSD + 
+        distAdjUSD +           // Transport cost (negative)
+        reconAdjUSD +          // Reconditioning cost (negative)
+        riskAdjUSD +           // Risk buffer (negative)
+        titleAdjUSD +          // Title issues (negative)
+        titlePctUSD +          // Title percentage (negative)
+        -targetProfitMarginUSD; // Profit margin (negative)
+
+      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleRaw));
 
       let transportCostUSD = null;
       
@@ -737,6 +748,8 @@
           saturationAdjUSD: Math.round(satAdjUSD),
           distanceMiles: inputs.distanceMiles,
           distanceAdjUSD: Math.round(distAdjUSD),
+          reconditioningAdjUSD: Math.round(reconAdjUSD),
+          targetProfitMarginUSD: Math.round(targetProfitMarginUSD),
           titleStatus: inputs.titleStatus || "Unknown",
           titleAdjUSD: Math.round(titleAdjUSD + titlePctUSD),
           riskAdjUSD: Math.round(riskAdjUSD),
@@ -1160,6 +1173,10 @@ RISK FLAGS examples:
               <div class="flex justify-between"><span>Title Adjustment</span><span class="font-semibold">${fmtUSD(b.titleAdjUSD)}</span></div>
 
               <div class="flex justify-between"><span>Risk Adjustments</span><span class="font-semibold">${fmtUSD(b.riskAdjUSD)}</span></div>
+              
+              <div class="flex justify-between"><span>Reconditioning Cost</span><span class="font-semibold">${fmtUSD(b.reconditioningAdjUSD)}</span></div>
+              <div class="flex justify-between"><span>Target Profit Margin (10%)</span><span class="font-semibold">-${fmtUSD(b.targetProfitMarginUSD)}</span></div>
+              
               <div class="flex justify-between"><span class="font-bold">Wholesale Target</span><span class="font-bold">${fmtUSD(b.wholesaleTargetUSD)}</span></div>
             </div>
           </div>
@@ -1169,15 +1186,36 @@ RISK FLAGS examples:
           <div class="p-4 rounded-2xl border bg-white">
             <div class="text-lg font-bold text-gray-900 mb-3">Deal Analysis</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <div class="flex justify-between"><span>Seller Asking</span><span class="font-semibold">${fmtUSD(d.askingPriceUSD)}</span></div>
+              <div class="flex justify-between"><span>Projected Retail Value</span><span class="font-semibold">${fmtUSD(b.projectedRetailUSD)}</span></div>
+              <div class="flex justify-between"><span class="font-bold text-blue-700">Wholesale Target (max pay)</span><span class="font-bold text-blue-700">${fmtUSD(b.wholesaleTargetUSD)}</span></div>
+              
+              <div class="flex justify-between"><span>Seller Asking Price</span><span class="font-semibold">${fmtUSD(d.askingPriceUSD)}</span></div>
+              <div class="flex justify-between">
+                <span class="font-bold ${d.askingPriceUSD <= b.wholesaleTargetUSD ? 'text-green-700' : 'text-red-700'}">
+                  ${d.askingPriceUSD <= b.wholesaleTargetUSD ? '✓ Recommended Offer' : '✗ Asking Too High'}
+                </span>
+                <span class="font-bold ${d.askingPriceUSD <= b.wholesaleTargetUSD ? 'text-green-700' : 'text-red-700'}">
+                  ${d.askingPriceUSD <= b.wholesaleTargetUSD ? fmtUSD(d.askingPriceUSD) : fmtUSD(b.wholesaleTargetUSD)}
+                </span>
+              </div>
+              
               <div class="flex justify-between"><span>Transport Cost</span><span class="font-semibold">${fmtUSD(d.transportCostUSD)}</span></div>
-              <div class="flex justify-between"><span>Reconditioning</span><span class="font-semibold">${fmtUSD(d.reconditioningUSD)}</span></div>
+              <div class="flex justify-between"><span>Reconditioning Cost</span><span class="font-semibold">${fmtUSD(d.reconditioningUSD)}</span></div>
+              
               <div class="flex justify-between"><span>Total Investment</span><span class="font-semibold">${fmtUSD(d.totalInvestmentUSD)}</span></div>
-              <div class="flex justify-between"><span>Projected Retail</span><span class="font-semibold">${fmtUSD(b.projectedRetailUSD)}</span></div>
-              <div class="flex justify-between"><span>Net Profit</span><span class="font-semibold">${fmtUSD(d.netProfitUSD)}</span></div>
+              <div class="flex justify-between"><span>Net Profit (if bought)</span><span class="font-semibold ${d.netProfitUSD >= 0 ? 'text-green-700' : 'text-red-700'}">${fmtUSD(d.netProfitUSD)}</span></div>
+              
               <div class="flex justify-between"><span>Profit Margin</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
               <div class="flex justify-between"><span>Priority</span><span class="font-bold">${d.priorityScore ?? "N/A"} — ${d.priorityTier ?? ""}</span></div>
             </div>
+            ${d.askingPriceUSD > b.wholesaleTargetUSD ? 
+              `<div class="mt-3 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-900">
+                <strong>⚠️ Negotiate:</strong> Asking price is $${((d.askingPriceUSD - b.wholesaleTargetUSD)).toLocaleString()} above our max. Counter-offer at $${b.wholesaleTargetUSD.toLocaleString()} or pass.
+              </div>` : 
+              `<div class="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-900">
+                <strong>✓ Good Deal:</strong> Asking price is within our target. Proceed with offer at $${d.askingPriceUSD.toLocaleString()}.
+              </div>`
+            }
           </div>
         `;
 
