@@ -203,10 +203,10 @@
 
     function currentSeasonAdjustmentPct() {
       const m = (new Date()).getMonth() + 1;
-      if (m >= 3 && m <= 5) return 0.065;
-      if (m >= 6 && m <= 8) return 0.04;
+      if (m >= 3 && m <= 5) return 0.0325;
+      if (m >= 6 && m <= 8) return 0.02;
       if (m >= 9 && m <= 11) return 0.0;
-      return -0.075;
+      return -0.0375;
     }
 
     function seasonName() {
