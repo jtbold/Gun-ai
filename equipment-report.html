@@ -1185,38 +1185,41 @@ RISK FLAGS examples:
                 </table>
               </div>
             </div>
-
-            <script>
-              (function() {
-                function initCompsChart() {
-                  if (typeof Chart === 'undefined') { setTimeout(initCompsChart, 200); return; }
-                  new Chart(document.getElementById('${chartId}'), {
-                    type: 'scatter',
-                    data: {
-                      datasets: [
-                        { label: 'Subject', data: ${JSON.stringify(subjectComp && subjectComp.hours !== null && subjectComp.priceUSD !== null ? [toPoint(subjectComp)] : [])}, backgroundColor: '#3B82F6', pointRadius: 10, pointHoverRadius: 12 },
-                        { label: 'Low hrs', data: ${JSON.stringify(lowHrs.map(toPoint))}, backgroundColor: '#16A34A', pointRadius: 7 },
-                        { label: 'Mid hrs', data: ${JSON.stringify(midHrs.map(toPoint))}, backgroundColor: '#D97706', pointRadius: 7 },
-                        { label: 'High hrs', data: ${JSON.stringify(highHrs.map(toPoint))}, backgroundColor: '#DC2626', pointRadius: 7 }
-                      ]
-                    },
-                    options: {
-                      responsive: true, maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw.x.toLocaleString() + ' hrs — $' + ctx.raw.y.toLocaleString() } }
-                      },
-                      scales: {
-                        x: { title: { display: true, text: 'Hours' }, ticks: { callback: (v) => v.toLocaleString() } },
-                        y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: (v) => '$' + (v/1000).toFixed(0) + 'k' } }
-                      }
-                    }
-                  });
-                }
-                initCompsChart();
-              })();
-            </script>
           `;
+
+          // Chart init must happen outside innerHTML (scripts injected via innerHTML don't execute)
+          const chartIdRef = chartId;
+          const subjectData = subjectComp && subjectComp.hours !== null && subjectComp.priceUSD !== null ? [toPoint(subjectComp)] : [];
+          const lowData  = lowHrs.map(toPoint);
+          const midData  = midHrs.map(toPoint);
+          const highData = highHrs.map(toPoint);
+
+          setTimeout(() => {
+            const canvas = document.getElementById(chartIdRef);
+            if (!canvas || typeof Chart === 'undefined') return;
+            new Chart(canvas, {
+              type: 'scatter',
+              data: {
+                datasets: [
+                  { label: 'Subject', data: subjectData, backgroundColor: '#3B82F6', pointRadius: 10, pointHoverRadius: 12 },
+                  { label: 'Low hrs', data: lowData,    backgroundColor: '#16A34A', pointRadius: 7 },
+                  { label: 'Mid hrs', data: midData,    backgroundColor: '#D97706', pointRadius: 7 },
+                  { label: 'High hrs', data: highData,  backgroundColor: '#DC2626', pointRadius: 7 }
+                ]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: (ctx) => ctx.raw.x.toLocaleString() + ' hrs — $' + ctx.raw.y.toLocaleString() } }
+                },
+                scales: {
+                  x: { title: { display: true, text: 'Hours' }, ticks: { callback: (v) => v.toLocaleString() } },
+                  y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: (v) => '$' + (v/1000).toFixed(0) + 'k' } }
+                }
+              }
+            });
+          }, 100);
         }
 
         const disclaimerBlock = `
