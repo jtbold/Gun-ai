@@ -509,6 +509,7 @@
     };
 
     const safeNum = (v) => {
+      if (v === null || v === undefined) return null;
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
@@ -642,16 +643,24 @@
       let netProfitUSD = null;
       let profitMarginPct = null;
 
+      let usingEstimatedProfit = false;
       if (asking !== null) {
         const tCost = transportCostUSD ?? 0;
         const rCost = recon ?? 0;
         totalInvestmentUSD = asking + tCost + rCost;
         netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
         profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
+      } else if (wholesaleTargetUSD > 0 && projectedRetailUSD > 0) {
+        usingEstimatedProfit = true;
+        const tCost = transportCostUSD ?? 0;
+        const rCost = recon ?? 0;
+        totalInvestmentUSD = wholesaleTargetUSD + tCost + rCost;
+        netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
+        profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
+        notes.push("Asking price missing: profit estimated from BFI wholesale target vs. projected retail.");
       } else {
         notes.push("Asking price missing: profit and priority score limited.");
       }
-
       const score = priorityScore({
         profitMarginPct,
         absoluteProfitUSD: netProfitUSD,
@@ -693,6 +702,7 @@
           totalInvestmentUSD,
           netProfitUSD,
           profitMarginPct,
+          usingEstimatedProfit,
           priorityScore: score,
           priorityTier: priorityTier(score)
         }
@@ -993,7 +1003,7 @@ RISK FLAGS examples:
                 <div class="flex justify-between"><span>Asking (Final)</span><span class="font-semibold">${fmtUSD(finalAsking)}</span></div>
                 <div class="flex justify-between"><span>Hours (Final)</span><span class="font-semibold">${finalHours ?? "N/A"}</span></div>
                 <div class="flex justify-between"><span>Asking (Extracted)</span><span class="font-semibold">${fmtUSD(safeNum(report.listing?.askingPriceUSD))}</span></div>
-                <div class="flex justify-between"><span>Hours (Extracted)</span><span class="font-semibold">${safeNum(report.listing?.hours) ?? "N/A"}</span></div>
+                <div class="flex justify-between"><span>Hours (Extracted)</span><span class="font-semibold">${safeNum(report.listing?.hours) ?? safeNum(report.hours?.reportedHours) ?? "N/A"}</span></div>
               </div>
               <div class="text-xs text-gray-500 mt-2">
                 If extracted values are missing or low-confidence, enter them manually for best results.
@@ -1077,14 +1087,15 @@ RISK FLAGS examples:
         const dealBlock = `
           <div class="p-4 rounded-2xl border bg-white">
             <div class="text-lg font-bold text-gray-900 mb-3">Deal Analysis</div>
+            ${d.usingEstimatedProfit ? `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">No asking price entered — profit figures estimated from BFI wholesale target vs. projected retail.</div>` : ''}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <div class="flex justify-between"><span>Seller Asking</span><span class="font-semibold">${fmtUSD(d.askingPriceUSD)}</span></div>
+              <div class="flex justify-between"><span>Seller Asking</span><span class="font-semibold">${d.askingPriceUSD !== null ? fmtUSD(d.askingPriceUSD) : (d.usingEstimatedProfit ? `${fmtUSD(b.wholesaleTargetUSD)} <span class="text-amber-600 text-xs">(BFI offer)</span>` : 'N/A')}</span></div>
               <div class="flex justify-between"><span>Transport Cost</span><span class="font-semibold">${fmtUSD(d.transportCostUSD)}</span></div>
               <div class="flex justify-between"><span>Reconditioning</span><span class="font-semibold">${fmtUSD(d.reconditioningUSD)}</span></div>
               <div class="flex justify-between"><span>Total Investment</span><span class="font-semibold">${fmtUSD(d.totalInvestmentUSD)}</span></div>
               <div class="flex justify-between"><span>Projected Retail</span><span class="font-semibold">${fmtUSD(b.projectedRetailUSD)}</span></div>
-              <div class="flex justify-between"><span>Net Profit</span><span class="font-semibold">${fmtUSD(d.netProfitUSD)}</span></div>
-              <div class="flex justify-between"><span>Profit Margin</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
+              <div class="flex justify-between"><span>Net Profit${d.usingEstimatedProfit ? ' <span class="text-amber-600 text-xs">(Est.)</span>' : ''}</span><span class="font-semibold">${fmtUSD(d.netProfitUSD)}</span></div>
+              <div class="flex justify-between"><span>Profit Margin${d.usingEstimatedProfit ? ' <span class="text-amber-600 text-xs">(Est.)</span>' : ''}</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
               <div class="flex justify-between"><span>Priority</span><span class="font-bold">${d.priorityScore ?? "N/A"} — ${d.priorityTier ?? ""}</span></div>
             </div>
           </div>
