@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -768,6 +769,7 @@ Core goals:
    - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
    - If still not reliable, set fields to null (do not guess).
 3) Estimate Base Market Value using grounded search comps.
+4) Find up to 8 real comparable listings for this machine (same make/model, nearby years) using Google Search grounding. Include the subject machine itself as the first entry.
 
 Return ONLY clean JSON (no markdown) in the exact schema below.
 Rules:
@@ -775,6 +777,7 @@ Rules:
 - Money must be NUMBERS in USD (no $, no commas, no ranges).
 - Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
 - Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
+- For comps: only include entries where you have a real price (not "call for price"). Convert foreign currency to USD if needed.
 
 SCHEMA:
 {
@@ -803,7 +806,19 @@ SCHEMA:
     "baseMarketValueUSD": "number|null",
     "sourcesUsedCount": "number|null",
     "sourcesSpreadPct": "number|null",
-    "marketVelocityScore": "number|null"
+    "marketVelocityScore": "number|null",
+    "comps": [
+      {
+        "isSubject": "boolean",
+        "year": "number|null",
+        "make": "string|null",
+        "model": "string|null",
+        "hours": "number|null",
+        "priceUSD": "number|null",
+        "config": "string|null",
+        "source": "string|null"
+      }
+    ]
   },
   "condition": {
     "conditionTier": "string|null (Excellent|Good|Fair|Poor|Unknown)",
@@ -1109,6 +1124,101 @@ RISK FLAGS examples:
           </div>
         `;
 
+        // ---- Market Comps Block ----
+        const comps = report?.market?.comps;
+        let compsBlock = '';
+        if (comps && comps.length > 0) {
+          const chartId = 'comps-chart-' + Date.now();
+
+          const subjectComp = comps.find(c => c.isSubject);
+          const otherComps = comps.filter(c => !c.isSubject && c.hours !== null && c.priceUSD !== null);
+
+          const lowHrs  = otherComps.filter(c => c.hours < 2000);
+          const midHrs  = otherComps.filter(c => c.hours >= 2000 && c.hours < 5000);
+          const highHrs = otherComps.filter(c => c.hours >= 5000);
+
+          const toPoint = c => ({ x: c.hours, y: c.priceUSD });
+
+          const tableRows = comps.map(c => {
+            const rowClass = c.isSubject ? 'style="background:#EFF6FF;"' : '';
+            const badge = c.isSubject
+              ? '<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:4px;background:#BFDBFE;color:#1E40AF;font-weight:500;margin-left:6px;">subject</span>'
+              : '';
+            const price = c.priceUSD ? '$' + c.priceUSD.toLocaleString() : 'N/A';
+            const hrs = c.hours !== null ? c.hours.toLocaleString() : 'N/A';
+            return `<tr ${rowClass}>
+              <td style="padding:6px 10px;">${c.year ?? '?'} ${c.make ?? ''} ${c.model ?? ''}${badge}</td>
+              <td style="padding:6px 10px;">${hrs}</td>
+              <td style="padding:6px 10px;font-size:12px;color:#6B7280;">${c.config ?? '—'}</td>
+              <td style="padding:6px 10px;font-weight:600;">${price}</td>
+              <td style="padding:6px 10px;font-size:12px;color:#6B7280;">${c.source ?? '—'}</td>
+            </tr>`;
+          }).join('');
+
+          compsBlock = `
+            <div class="p-4 rounded-2xl border bg-white">
+              <div class="text-lg font-bold text-gray-900 mb-3">Market Comps</div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#6B7280;margin-bottom:10px;">
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B82F6;display:inline-block;"></span>Subject</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#16A34A;display:inline-block;"></span>Low hrs (&lt;2,000)</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#D97706;display:inline-block;"></span>Mid hrs (2,000–5,000)</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#DC2626;display:inline-block;"></span>High hrs (&gt;5,000)</span>
+              </div>
+
+              <div style="position:relative;width:100%;height:240px;margin-bottom:16px;">
+                <canvas id="${chartId}"></canvas>
+              </div>
+
+              <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                  <thead>
+                    <tr style="border-bottom:1px solid #E5E7EB;">
+                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Machine</th>
+                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Hours</th>
+                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Config</th>
+                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Price</th>
+                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody style="divide-y divide-gray-100;">${tableRows}</tbody>
+                </table>
+              </div>
+            </div>
+
+            <script>
+              (function() {
+                function initCompsChart() {
+                  if (typeof Chart === 'undefined') { setTimeout(initCompsChart, 200); return; }
+                  new Chart(document.getElementById('${chartId}'), {
+                    type: 'scatter',
+                    data: {
+                      datasets: [
+                        { label: 'Subject', data: ${JSON.stringify(subjectComp && subjectComp.hours !== null && subjectComp.priceUSD !== null ? [toPoint(subjectComp)] : [])}, backgroundColor: '#3B82F6', pointRadius: 10, pointHoverRadius: 12 },
+                        { label: 'Low hrs', data: ${JSON.stringify(lowHrs.map(toPoint))}, backgroundColor: '#16A34A', pointRadius: 7 },
+                        { label: 'Mid hrs', data: ${JSON.stringify(midHrs.map(toPoint))}, backgroundColor: '#D97706', pointRadius: 7 },
+                        { label: 'High hrs', data: ${JSON.stringify(highHrs.map(toPoint))}, backgroundColor: '#DC2626', pointRadius: 7 }
+                      ]
+                    },
+                    options: {
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => ctx.raw.x.toLocaleString() + ' hrs — $' + ctx.raw.y.toLocaleString() } }
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Hours' }, ticks: { callback: (v) => v.toLocaleString() } },
+                        y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: (v) => '$' + (v/1000).toFixed(0) + 'k' } }
+                      }
+                    }
+                  });
+                }
+                initCompsChart();
+              })();
+            </script>
+          `;
+        }
+
         const disclaimerBlock = `
           <div class="p-4 mt-2 bg-yellow-50 text-sm text-yellow-900 rounded-xl border border-yellow-100">
             <strong>Disclaimer:</strong> ${report.disclaimer ?? "This report is an estimate based on photos, notes, and grounded market data. Verify condition, title, and hours before purchase."}
@@ -1124,6 +1234,7 @@ RISK FLAGS examples:
           ${breakdownTable}
           ${dealBlock}
           ${riskBlock}
+          ${compsBlock}
           <div class="p-4 rounded-2xl border bg-gray-50">${sourcesHtml}</div>
           ${disclaimerBlock}
         `;
