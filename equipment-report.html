@@ -179,6 +179,8 @@
     // -------------------------
     // BFI RULE ENGINE CONSTANTS
     // -------------------------
+    const BFI_MIN_GROSS_MARGIN = 0.15; // Wholesale target cannot exceed (1 - BFI_MIN_GROSS_MARGIN) * projectedRetail
+
     const REGION_MULTIPLIERS = {
       "Mountain West": 1.00,
       "Texas/Oklahoma": 1.10,
@@ -622,7 +624,8 @@
         titlePctUSD +
         distAdjUSD;
 
-      const wholesaleTargetUSD = Math.max(0, Math.min(projectedRetailUSD, Math.round(wholesaleRaw)));
+      // Wholesale target must never exceed (1 - BFI_MIN_GROSS_MARGIN) of projected retail
+      const wholesaleTargetUSD = Math.max(0, Math.min(Math.round(projectedRetailUSD * (1 - BFI_MIN_GROSS_MARGIN)), Math.round(wholesaleRaw)));
 
       const asking = inputs.askingPriceUSD;
       const recon = inputs.reconditioningUSD ?? null;
