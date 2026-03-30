@@ -510,7 +510,7 @@
     };
 
     const safeNum = (v) => {
-      if (v === null || v === undefined) return null;
+      if (v === null || v === undefined || v === '') return null;
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
@@ -1130,64 +1130,62 @@ RISK FLAGS examples:
         if (comps && comps.length > 0) {
           const chartId = 'comps-chart-' + Date.now();
 
-          const subjectComp = comps.find(c => c.isSubject);
-          const otherComps = comps.filter(c => !c.isSubject && c.hours !== null && c.priceUSD !== null);
+          // Inject projected retail into subject comp so it appears on chart and table
+          const compsWithSubjectPrice = comps.map(c => {
+            if (c.isSubject && (c.priceUSD === null || c.priceUSD === undefined)) {
+              return Object.assign({}, c, { priceUSD: b.projectedRetailUSD, priceIsEstimate: true });
+            }
+            return c;
+          });
 
+          const subjectComp = compsWithSubjectPrice.find(c => c.isSubject);
+          const otherComps = compsWithSubjectPrice.filter(c => !c.isSubject && c.hours !== null && c.priceUSD !== null);
           const lowHrs  = otherComps.filter(c => c.hours < 2000);
           const midHrs  = otherComps.filter(c => c.hours >= 2000 && c.hours < 5000);
           const highHrs = otherComps.filter(c => c.hours >= 5000);
-
           const toPoint = c => ({ x: c.hours, y: c.priceUSD });
 
-          const tableRows = comps.map(c => {
-            const rowClass = c.isSubject ? 'style="background:#EFF6FF;"' : '';
+          const tableRows = compsWithSubjectPrice.map(c => {
+            const rowBg = c.isSubject ? 'background:#EFF6FF;' : '';
             const badge = c.isSubject
               ? '<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:4px;background:#BFDBFE;color:#1E40AF;font-weight:500;margin-left:6px;">subject</span>'
               : '';
-            const price = c.priceUSD ? '$' + c.priceUSD.toLocaleString() : 'N/A';
+            const priceLabel = c.priceUSD
+              ? '$' + c.priceUSD.toLocaleString() + (c.priceIsEstimate ? ' <span style="font-size:10px;color:#6B7280;">(est. retail)</span>' : '')
+              : 'N/A';
             const hrs = c.hours !== null ? c.hours.toLocaleString() : 'N/A';
-            return `<tr ${rowClass}>
-              <td style="padding:6px 10px;">${c.year ?? '?'} ${c.make ?? ''} ${c.model ?? ''}${badge}</td>
-              <td style="padding:6px 10px;">${hrs}</td>
-              <td style="padding:6px 10px;font-size:12px;color:#6B7280;">${c.config ?? '—'}</td>
-              <td style="padding:6px 10px;font-weight:600;">${price}</td>
-              <td style="padding:6px 10px;font-size:12px;color:#6B7280;">${c.source ?? '—'}</td>
-            </tr>`;
+            return '<tr style="' + rowBg + '">'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;">' + (c.year || '?') + ' ' + (c.make || '') + ' ' + (c.model || '') + badge + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;">' + hrs + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-size:12px;color:#6B7280;">' + (c.config || '&mdash;') + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-weight:600;">' + priceLabel + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-size:12px;color:#6B7280;">' + (c.source || '&mdash;') + '</td>'
+              + '</tr>';
           }).join('');
 
-          compsBlock = `
-            <div class="p-4 rounded-2xl border bg-white">
-              <div class="text-lg font-bold text-gray-900 mb-3">Market Comps</div>
+          compsBlock = ''
+            + '<div class="p-4 rounded-2xl border bg-white">'
+            + '<div class="text-lg font-bold text-gray-900 mb-3">Market Comps</div>'
+            + '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#6B7280;margin-bottom:10px;">'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B82F6;display:inline-block;"></span>Subject</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#16A34A;display:inline-block;"></span>Low hrs (&lt;2,000)</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#D97706;display:inline-block;"></span>Mid hrs (2,000-5,000)</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#DC2626;display:inline-block;"></span>High hrs (&gt;5,000)</span>'
+            + '</div>'
+            + '<div style="position:relative;width:100%;height:240px;margin-bottom:16px;"><canvas id="' + chartId + '"></canvas></div>'
+            + '<div style="overflow-x:auto;">'
+            + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            + '<thead><tr style="border-bottom:1px solid #E5E7EB;">'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Machine</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Hours</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Config</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Price</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Source</th>'
+            + '</tr></thead>'
+            + '<tbody>' + tableRows + '</tbody>'
+            + '</table></div></div>';
 
-              <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#6B7280;margin-bottom:10px;">
-                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B82F6;display:inline-block;"></span>Subject</span>
-                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#16A34A;display:inline-block;"></span>Low hrs (&lt;2,000)</span>
-                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#D97706;display:inline-block;"></span>Mid hrs (2,000–5,000)</span>
-                <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#DC2626;display:inline-block;"></span>High hrs (&gt;5,000)</span>
-              </div>
-
-              <div style="position:relative;width:100%;height:240px;margin-bottom:16px;">
-                <canvas id="${chartId}"></canvas>
-              </div>
-
-              <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                  <thead>
-                    <tr style="border-bottom:1px solid #E5E7EB;">
-                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Machine</th>
-                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Hours</th>
-                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Config</th>
-                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Price</th>
-                      <th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Source</th>
-                    </tr>
-                  </thead>
-                  <tbody style="divide-y divide-gray-100;">${tableRows}</tbody>
-                </table>
-              </div>
-            </div>
-          `;
-
-          // Chart init must happen outside innerHTML (scripts injected via innerHTML don't execute)
+          // Chart init deferred — cannot inject script tags via innerHTML
           const chartIdRef = chartId;
           const subjectData = subjectComp && subjectComp.hours !== null && subjectComp.priceUSD !== null ? [toPoint(subjectComp)] : [];
           const lowData  = lowHrs.map(toPoint);
@@ -1195,9 +1193,9 @@ RISK FLAGS examples:
           const highData = highHrs.map(toPoint);
 
           setTimeout(() => {
-            const canvas = document.getElementById(chartIdRef);
-            if (!canvas || typeof Chart === 'undefined') return;
-            new Chart(canvas, {
+            const el = document.getElementById(chartIdRef);
+            if (!el || typeof Chart === 'undefined') return;
+            new Chart(el, {
               type: 'scatter',
               data: {
                 datasets: [
@@ -1211,16 +1209,17 @@ RISK FLAGS examples:
                 responsive: true, maintainAspectRatio: false,
                 plugins: {
                   legend: { display: false },
-                  tooltip: { callbacks: { label: (ctx) => ctx.raw.x.toLocaleString() + ' hrs — $' + ctx.raw.y.toLocaleString() } }
+                  tooltip: { callbacks: { label: function(ctx) { return ctx.raw.x.toLocaleString() + ' hrs - $' + ctx.raw.y.toLocaleString(); } } }
                 },
                 scales: {
-                  x: { title: { display: true, text: 'Hours' }, ticks: { callback: (v) => v.toLocaleString() } },
-                  y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: (v) => '$' + (v/1000).toFixed(0) + 'k' } }
+                  x: { title: { display: true, text: 'Hours' }, ticks: { callback: function(v) { return v.toLocaleString(); } } },
+                  y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } } }
                 }
               }
             });
           }, 100);
         }
+
 
         const disclaimerBlock = `
           <div class="p-4 mt-2 bg-yellow-50 text-sm text-yellow-900 rounded-xl border border-yellow-100">
