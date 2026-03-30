@@ -622,7 +622,7 @@
         titlePctUSD +
         distAdjUSD;
 
-      const wholesaleTargetUSD = Math.max(0, Math.round(wholesaleRaw));
+      const wholesaleTargetUSD = Math.max(0, Math.min(projectedRetailUSD, Math.round(wholesaleRaw)));
 
       const asking = inputs.askingPriceUSD;
       const recon = inputs.reconditioningUSD ?? null;
@@ -873,13 +873,17 @@ RISK FLAGS examples:
 
         // Decide final asking/hours: user-entered wins; otherwise use listing extraction if confident enough
         const modelAsking = safeNum(report?.listing?.askingPriceUSD);
-        const modelHours = safeNum(report?.listing?.hours) ?? safeNum(report?.hours?.reportedHours);
+        // Separate listing-extracted hours (URL-dependent) from photo-extracted hours (always available)
+        const listingHours = safeNum(report?.listing?.hours);
+        const photoHours = safeNum(report?.hours?.reportedHours);
 
         const listingConfidence = (report?.listing?.listingExtractionConfidence || "").toLowerCase();
         const allowListingFill = (listingConfidence === "high" || listingConfidence === "medium");
 
         const finalAsking = (userAsking !== null) ? userAsking : (allowListingFill ? modelAsking : null);
-        const finalHours = (userHours !== null) ? userHours : (allowListingFill ? modelHours : null);
+        // Photo hours are always trusted; listing hours only used when listing confidence is high/medium
+        const modelHours = (allowListingFill ? listingHours : null) ?? photoHours;
+        const finalHours = (userHours !== null) ? userHours : modelHours;
 
         // If both exist and differ wildly, flag manual review
         let listingMismatchFlag = false;
