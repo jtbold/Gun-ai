@@ -1164,7 +1164,7 @@ RISK FLAGS examples:
           }).join('');
 
           compsBlock = ''
-            + '<div class="p-4 rounded-2xl border bg-white">'
+            + '<div id="comps-block" class="p-4 rounded-2xl border bg-white">'
             + '<div class="text-lg font-bold text-gray-900 mb-3">Market Comps</div>'
             + '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#6B7280;margin-bottom:10px;">'
             + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B82F6;display:inline-block;"></span>Subject</span>'
@@ -1289,7 +1289,10 @@ RISK FLAGS examples:
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 10;
 
-        // Page 1: report
+        // Page 1: report — hide comps block so it doesn't appear here
+        const compsEl = document.getElementById('comps-block');
+        if (compsEl) compsEl.style.display = 'none';
+
         const canvas = await html2canvas(reportElement, { scale: 2 });
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
         const imgW = pageWidth - margin * 2;
@@ -1297,7 +1300,23 @@ RISK FLAGS examples:
         doc.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
         addFooter(doc, margin, pageHeight);
 
-        // Reference images (smaller ~3")
+        // Page 2: comps chart + table (if present)
+        if (compsEl) {
+          compsEl.style.display = 'block';
+          doc.addPage();
+          doc.setFontSize(14);
+          doc.setTextColor(0);
+          doc.text("Market Comps", margin, margin + 4);
+          addFooter(doc, margin, pageHeight);
+
+          const compsCanvas = await html2canvas(compsEl, { scale: 2 });
+          const compsImgData = compsCanvas.toDataURL('image/jpeg', 0.85);
+          const compsImgW = pageWidth - margin * 2;
+          const compsImgH = (compsCanvas.height * compsImgW) / compsCanvas.width;
+          doc.addImage(compsImgData, 'JPEG', margin, margin + 10, compsImgW, compsImgH);
+        }
+
+        // Page 3+: Reference images — 25% smaller (~57mm wide, fits 3 per row)
         if (originalFiles.length) {
           doc.addPage();
           let y = margin;
@@ -1307,9 +1326,10 @@ RISK FLAGS examples:
           y += 10;
           addFooter(doc, margin, pageHeight);
 
-          const imgTargetWidthMm = 76; // ~3 inches
-          const pad = 6;
+          const imgTargetWidthMm = 57; // 76 * 0.75 = ~57mm
+          const pad = 5;
           const col2x = margin + imgTargetWidthMm + pad;
+          const col3x = col2x + imgTargetWidthMm + pad;
 
           for (let i = 0; i < originalFiles.length; i++) {
             const file = originalFiles[i];
@@ -1318,16 +1338,15 @@ RISK FLAGS examples:
             await new Promise(res => r.onloadend = res);
 
             const url = r.result;
-
             const img = new Image();
             img.src = url;
             await new Promise(res => img.onload = res);
             const hMm = imgTargetWidthMm * (img.height / img.width);
 
-            const isLeft = (i % 2 === 0);
-            const x = isLeft ? margin : col2x;
+            const col = i % 3;
+            const x = col === 0 ? margin : col === 1 ? col2x : col3x;
 
-            if (isLeft && i > 0) y += hMm + pad;
+            if (col === 0 && i > 0) y += hMm + pad;
 
             if (y + hMm > pageHeight - margin - 10) {
               doc.addPage();
