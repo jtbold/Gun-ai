@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>BFI Equipment Report Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background:#f3f4f6; }
+    .container { max-width: 900px; }
+    .no-break { white-space: nowrap; }
+    #report-header { display:flex; flex-direction:column; align-items:center; padding-bottom:1rem; border-bottom:2px solid #e5e7eb; margin-bottom:1rem; }
+  </style>
+</head>
+
+<body class="min-h-screen p-4 flex flex-col items-center">
+  <div class="container bg-white rounded-3xl shadow-xl p-8 space-y-8">
+    <header class="text-center space-y-3">
+      <div class="flex items-center justify-center gap-3">
+        <img id="bfi-logo" src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-14 w-auto rounded" />
+        <div class="text-left">
+          <div class="text-xl font-extrabold text-gray-900">Bona Fide Iron</div>
+          <div class="text-sm text-gray-500">AI Valuation Engine</div>
+        </div>
+      </div>
+
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">Construction Equipment Report Generator</h1>
+      <p class="text-gray-500">
+        Upload up to <strong>20</strong> photos to generate a professional identification + valuation + deal analysis report.
+      </p>
+      <p id="user-id" class="text-xs text-gray-400"></p>
+    </header>
+
+    <!-- Upload -->
+    <div id="drop-zone" class="w-full rounded-2xl border-4 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-gray-400">
+      <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
+      <div class="text-lg font-medium text-gray-700">Drag & drop, paste (Ctrl+V), or click to upload images</div>
+      <p class="text-sm text-gray-400 mt-2">Maximum of 20 images, up to 6MB each.</p>
+      <button id="upload-button" class="mt-6 px-6 py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-700 transition-colors">
+        Choose Images
+      </button>
+    </div>
+
+    <!-- Listing link + Optional listing details -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="space-y-2 md:col-span-2">
+        <label class="text-sm font-medium text-gray-700">Listing URL (optional, recommended)</label>
+        <input id="listing-url" type="text"
+               placeholder="Paste listing link (e.g., Herc, MachineryTrader, Ritchie Bros, etc.)"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">
+          If you paste a link, the app will try to extract price/hours/specs via Google grounding. If not reliably available, it will leave fields blank and flag review.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Seller Asking Price (USD) — optional</label>
+        <input id="asking-price" type="number" min="0" step="100"
+               placeholder="e.g., 107000"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">If blank, we’ll try to pull asking price from the listing URL.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Operating Hours — optional</label>
+        <input id="hours" type="number" min="0" step="10"
+               placeholder="e.g., 8200"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">If blank, we’ll try to pull hours from the listing URL.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Region — optional (defaults Mountain West)</label>
+        <select id="region" class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Auto / Default</option>
+          <option value="Mountain West">Mountain West (CO/WY/MT)</option>
+          <option value="Texas/Oklahoma">Texas/Oklahoma</option>
+          <option value="California">California</option>
+          <option value="Pacific Northwest">Pacific Northwest</option>
+          <option value="Midwest">Midwest</option>
+          <option value="Southeast">Southeast</option>
+          <option value="Northeast">Northeast</option>
+        </select>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Distance from Denver (miles) — optional</label>
+        <input id="distance" type="number" min="0" step="10"
+               placeholder="e.g., 250"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <p class="text-xs text-gray-400">Used for transport adjustment buckets.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Days on Market — optional</label>
+        <input id="days-on-market" type="number" min="0" step="1"
+               placeholder="e.g., 28"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-gray-700">Inventory Count (same model) — optional</label>
+        <input id="inventory-count" type="number" min="0" step="1"
+               placeholder="e.g., 2"
+               class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+      </div>
+
+      <div class="space-y-2 md:col-span-2">
+        <label class="text-sm font-medium text-gray-700">Title / Documentation — optional</label>
+        <select id="title-status" class="w-full rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="">Unknown</option>
+          <option value="Clean">Clean / OK</option>
+          <option value="OutOfState">Out-of-state title</option>
+          <option value="Lien">Lien holder listed</option>
+          <option value="Rebuilt">Rebuilt title</option>
+          <option value="Salvage">Salvage title</option>
+          <option value="NoTitle">No title available</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="w-full">
+      <div class="flex flex-col gap-3">
+        <label for="notes-input" class="text-sm font-medium text-gray-700">
+          Optional notes (serial, attachments, recent overhaul, issues, location, listing link, etc.)
+        </label>
+        <textarea id="notes-input" rows="4"
+                  class="rounded-xl p-3 border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+      </div>
+    </div>
+
+    <!-- Previews -->
+    <div id="image-previews" class="flex flex-wrap gap-4 justify-center items-center p-4 rounded-xl bg-gray-50 shadow-inner" style="display:none;"></div>
+
+    <!-- Actions -->
+    <div class="flex flex-col items-center justify-center space-y-4">
+      <button id="generate-button" class="w-full px-8 py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        Generate Report
+      </button>
+
+      <button id="download-button" class="w-full px-8 py-4 bg-gray-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:bg-gray-700 transition-colors hidden">
+        Download Report (PDF)
+      </button>
+
+      <div id="status-message" class="text-sm text-center text-gray-600"></div>
+    </div>
+
+    <!-- Report -->
+    <div id="report-container" class="w-full bg-white rounded-2xl shadow-lg p-6 space-y-6" style="display:none;">
+      <div id="report-header" class="space-y-2">
+        <img src="bona-fide-iron-logo.jpg" alt="Bona Fide Iron" class="h-12 w-auto rounded" />
+        <h2 class="text-2xl font-bold text-gray-900">Equipment Identification & Valuation Report</h2>
+        <div id="report-meta" class="text-xs text-gray-500"></div>
+      </div>
+
+      <div id="report-content" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // ***************************************************************
+    // CRITICAL SECURITY: This MUST be injected by your Render build script.
+    const API_KEY = "";
+    // ***************************************************************
+
+    // -------------------------
+    // BFI RULE ENGINE CONSTANTS
+    // -------------------------
+    const BFI_MIN_GROSS_MARGIN = 0.15; // Wholesale target cannot exceed (1 - BFI_MIN_GROSS_MARGIN) * projectedRetail
+
+    const REGION_MULTIPLIERS = {
+      "Mountain West": 1.00,
+      "Texas/Oklahoma": 1.10,
+      "California": 1.08,
+      "Pacific Northwest": 1.04,
+      "Midwest": 0.94,
+      "Southeast": 1.02,
+      "Northeast": 0.985
+    };
+
+    function distanceAdjustmentUSD(distanceMiles) {
+      if (distanceMiles === null || distanceMiles === undefined || isNaN(distanceMiles)) return null;
+      if (distanceMiles <= 100) return -650;
+      if (distanceMiles <= 300) return -1500;
+      if (distanceMiles <= 500) return -2750;
+      if (distanceMiles <= 800) return -4250;
+      return null;
+    }
+
+    function currentSeasonAdjustmentPct() {
+      const m = (new Date()).getMonth() + 1;
+      if (m >= 3 && m <= 5) return 0.0325;
+      if (m >= 6 && m <= 8) return 0.02;
+      if (m >= 9 && m <= 11) return 0.0;
+      return -0.0375;
+    }
+
+    function seasonName() {
+      const m = (new Date()).getMonth() + 1;
+      if (m >= 3 && m <= 5) return "Spring";
+      if (m >= 6 && m <= 8) return "Summer";
+      if (m >= 9 && m <= 11) return "Fall";
+      return "Winter";
+    }
+
+    function saturationPenaltyPct(inventoryCount) {
+      if (inventoryCount === null || inventoryCount === undefined || isNaN(inventoryCount)) return null;
+      if (inventoryCount <= 2) return 0.0;
+      if (inventoryCount <= 4) return -0.05;
+      if (inventoryCount <= 6) return -0.10;
+      return -0.20;
+    }
+
+    function titleRule(titleStatus) {
+      const out = { decision:"OK", adjustmentUSD:0, adjustmentPct:0, notes:[] };
+      if (!titleStatus) return out;
+
+      if (titleStatus === "NoTitle" || titleStatus === "Salvage") {
+        out.decision = "DECLINE";
+        out.notes.push("Title status triggers DECLINE under BFI rules.");
+        return out;
+      }
+      if (titleStatus === "Rebuilt") {
+        out.decision = "FLAG";
+        out.adjustmentPct = -0.25;
+        out.notes.push("Rebuilt title: -25% minimum adjustment or decline.");
+        return out;
+      }
+      if (titleStatus === "OutOfState") {
+        out.decision = "OK";
+        out.adjustmentUSD = -500;
+        out.notes.push("Out-of-state title: -$500 transfer cost.");
+        return out;
+      }
+      if (titleStatus === "Lien") {
+        out.decision = "FLAG";
+        out.notes.push("Lien holder listed: verify lien release before purchase.");
+        return out;
+      }
+      return out;
+    }
+
+    const LIFESPAN_BY_TYPE = {
+      "Excavator (standard)": { lifespan: 10000 },
+      "Excavator (heavy duty)": { lifespan: 15000 },
+      "Dozer": { lifespan: 12000 },
+      "Wheel loader": { lifespan: 10000 },
+      "Track loader": { lifespan: 8000 },
+      "Backhoe": { lifespan: 6000 },
+      "Skid steer": { lifespan: 5000 }
+    };
+
+    function hoursPenaltyPct(hours, lifespan) {
+      if (hours === null || hours === undefined || isNaN(hours) || !lifespan) return null;
+      const pct = hours / lifespan;
+      if (pct <= 0.40) return +0.05;
+      if (pct <= 0.60) return 0.0;
+      if (pct <= 0.80) return -0.10;
+      if (pct <= 1.00) return -0.25;
+      return -0.40;
+    }
+
+    function limitedDataSafetyMarginPct(sourcesUsedCount) {
+      if (sourcesUsedCount === null || sourcesUsedCount === undefined || isNaN(sourcesUsedCount)) return null;
+      if (sourcesUsedCount <= 2) return -0.15;
+      return 0.0;
+    }
+
+    function priorityScore({ profitMarginPct, absoluteProfitUSD, confidencePct, marketVelocityScore, daysOnMarket }) {
+      function marginPoints(p) {
+        if (p === null || p === undefined || isNaN(p)) return 0;
+        if (p >= 0.50) return 100;
+        if (p >= 0.40) return 80;
+        if (p >= 0.30) return 60;
+        if (p >= 0.20) return 40;
+        return Math.max(0, Math.round(p * 200));
+      }
+      function profitPoints(p) {
+        if (p === null || p === undefined || isNaN(p)) return 0;
+        if (p >= 30000) return 100;
+        if (p >= 20000) return 75;
+        if (p >= 10000) return 50;
+        return Math.max(0, Math.round((p / 10000) * 50));
+      }
+      function domPoints(d) {
+        if (d === null || d === undefined || isNaN(d)) return 50;
+        if (d < 7) return 25;
+        if (d > 30) return 100;
+        return Math.round(40 + (d - 7) * (55 / 23));
+      }
+
+      const mPts = marginPoints(profitMarginPct);
+      const pPts = profitPoints(absoluteProfitUSD);
+      const cPts = Math.max(0, Math.min(100, Math.round(confidencePct || 0)));
+      const vPts = Math.max(0, Math.min(100, Math.round(marketVelocityScore || 50)));
+      const dPts = domPoints(daysOnMarket);
+
+      const score =
+        (mPts * 0.40) +
+        (pPts * 0.30) +
+        (cPts * 0.15) +
+        (vPts * 0.10) +
+        (dPts * 0.05);
+
+      return Math.round(score * 10) / 10;
+    }
+
+    function priorityTier(score) {
+      if (score >= 90) return "CRITICAL";
+      if (score >= 75) return "HIGH";
+      if (score >= 60) return "MEDIUM";
+      if (score >= 40) return "LOW";
+      return "PASS";
+    }
+
+    // ---------------
+    // App state
+    // ---------------
+    let reportData = null;
+    let selectedFiles = [];
+    let originalFiles = [];
+
+    // Firebase
+    let app, db = null, auth, userId;
+    let isAuthReady = false;
+
+    async function initFirebase() {
+      try {
+        if (Object.keys(firebaseConfig).length === 0) {
+          isAuthReady = true;
+          userId = crypto.randomUUID();
+          document.getElementById('user-id').textContent = `User ID: (Local) ${userId.substring(0, 8)}...`;
+          return;
+        }
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+        else await signInAnonymously(auth);
+
+        userId = auth.currentUser.uid;
+        document.getElementById('user-id').textContent = `User ID: ${userId}`;
+        isAuthReady = true;
+      } catch (e) {
+        console.error("Firebase init error:", e);
+        db = null;
+        isAuthReady = true;
+        document.getElementById('status-message').textContent = "Database unavailable (local mode).";
+      }
+    }
+    initFirebase();
+
+    // DOM
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadButton = document.getElementById('upload-button');
+    const notesInput = document.getElementById('notes-input');
+    const generateButton = document.getElementById('generate-button');
+    const downloadButton = document.getElementById('download-button');
+    const imagePreviewsContainer = document.getElementById('image-previews');
+    const statusMessage = document.getElementById('status-message');
+    const reportContainer = document.getElementById('report-container');
+    const reportContent = document.getElementById('report-content');
+    const reportMeta = document.getElementById('report-meta');
+
+    const listingUrlEl = document.getElementById('listing-url');
+    const askingPriceEl = document.getElementById('asking-price');
+    const hoursEl = document.getElementById('hours');
+    const regionEl = document.getElementById('region');
+    const distanceEl = document.getElementById('distance');
+    const domEl = document.getElementById('days-on-market');
+    const inventoryEl = document.getElementById('inventory-count');
+    const titleEl = document.getElementById('title-status');
+
+    // Limits
+    const MAX_FILES = 20;
+    const MAX_FILE_SIZE_MB = 6;
+
+    // Image processing for stability
+    const MAX_IMAGE_SIDE_PX_MODEL = 1024;
+    const UNSUPPORTED_MIME_TYPES = ['image/avif', 'image/svg+xml'];
+
+    function showMessage(message, type = 'info') {
+      statusMessage.className = `text-sm text-center mt-4 ${type === 'error' ? 'text-red-600' : 'text-gray-600'}`;
+      statusMessage.textContent = message;
+    }
+
+    function toggleGenerateButton() {
+      generateButton.disabled = selectedFiles.length === 0;
+      if (selectedFiles.length === 0 && !reportData) downloadButton.classList.add('hidden');
+    }
+
+    function showPreviews() {
+      imagePreviewsContainer.innerHTML = '';
+      if (selectedFiles.length > 0) {
+        imagePreviewsContainer.style.display = 'flex';
+        selectedFiles.forEach((file, index) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'relative group w-28 h-28 rounded-lg overflow-hidden shadow-md';
+            imgWrapper.innerHTML = `
+              <img src="${e.target.result}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
+              <button class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 leading-none text-sm opacity-0 group-hover:opacity-100 transition-opacity" data-index="${index}">
+                &times;
+              </button>
+            `;
+            imagePreviewsContainer.appendChild(imgWrapper);
+          };
+          reader.readAsDataURL(file);
+        });
+      } else {
+        imagePreviewsContainer.style.display = 'none';
+      }
+    }
+
+    function processFiles(files) {
+      let newFiles = Array.from(files).filter(file => {
+        const mt = (file.type || '').toLowerCase();
+        if (!mt.startsWith('image/')) { showMessage(`"${file.name}" is not an image.`, 'error'); return false; }
+        if (UNSUPPORTED_MIME_TYPES.includes(mt)) { showMessage(`"${file.name}" is an unsupported format. Use JPG/PNG.`, 'error'); return false; }
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showMessage(`"${file.name}" exceeds ${MAX_FILE_SIZE_MB}MB.`, 'error'); return false; }
+        return true;
+      });
+
+      if (selectedFiles.length + newFiles.length > MAX_FILES) {
+        const limit = MAX_FILES - selectedFiles.length;
+        newFiles = newFiles.slice(0, limit);
+        showMessage(`Max ${MAX_FILES} images. Added ${limit}.`, 'error');
+      }
+
+      selectedFiles = [...selectedFiles, ...newFiles].slice(0, MAX_FILES);
+      showPreviews();
+      toggleGenerateButton();
+      if (newFiles.length) showMessage(`Added ${newFiles.length} image(s). Total: ${selectedFiles.length}/${MAX_FILES}`);
+    }
+
+    function resizeForModel(file) {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > MAX_IMAGE_SIDE_PX_MODEL || h > MAX_IMAGE_SIDE_PX_MODEL) {
+            const r = Math.max(w / MAX_IMAGE_SIDE_PX_MODEL, h / MAX_IMAGE_SIDE_PX_MODEL);
+            w = Math.round(w / r); h = Math.round(h / r);
+          }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            resolve(new File([blob], file.name.replace(/\.\w+$/, '') + ".jpg", { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.85);
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    // Try to find a URL in notes if listing URL field is empty
+    function extractUrlFromText(text) {
+      if (!text) return null;
+      const m = text.match(/https?:\/\/[^\s)]+/i);
+      return m ? m[0] : null;
+    }
+
+    uploadButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value=''; });
+
+    dropZone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropZone.classList.add('border-gray-500','bg-gray-50'); });
+    dropZone.addEventListener('dragleave', (e)=>{ e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); });
+    dropZone.addEventListener('drop', (e)=>{ e.preventDefault(); dropZone.classList.remove('border-gray-500','bg-gray-50'); processFiles(e.dataTransfer.files); });
+
+    window.addEventListener('paste', (e) => {
+      const items = e.clipboardData.items;
+      const files = [];
+      for (let i=0;i<items.length;i++) {
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) files.push(items[i].getAsFile());
+      }
+      if (files.length) processFiles(files);
+    });
+
+    imagePreviewsContainer.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON') {
+        const idx = Number(e.target.getAttribute('data-index'));
+        selectedFiles.splice(idx, 1);
+        showPreviews();
+        toggleGenerateButton();
+        showMessage(`Removed image ${idx+1}.`);
+      }
+    });
+
+    const fmtUSD = (n) => {
+      if (n === null || n === undefined || isNaN(n)) return "N/A";
+      return new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 }).format(n);
+    };
+
+    const safeNum = (v) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    function computeBFIValuation(inputs) {
+      const notes = [];
+      const flags = [];
+      let decision = "OK";
+
+      const t = titleRule(inputs.titleStatus);
+      if (t.decision === "DECLINE") {
+        return { decision:"DECLINE", notes:[...t.notes], flags:["DECLINE"], breakdown:{}, deal:{} };
+      }
+      if (t.decision === "FLAG") { decision = "FLAG"; flags.push("MANUAL_REVIEW"); notes.push(...t.notes); }
+      const titleAdjUSD = t.adjustmentUSD || 0;
+      const titleAdjPct = t.adjustmentPct || 0;
+
+      let base = inputs.baseMarketValueUSD;
+      if (base === null) {
+        decision = "FLAG";
+        flags.push("MANUAL_REVIEW");
+        notes.push("No comparable market data found: unable to value automatically.");
+        return { decision, notes, flags, breakdown:{ baseMarketValueUSD:null }, deal:{} };
+      }
+
+      const spread = inputs.sourcesSpreadPct;
+      const srcCount = inputs.sourcesUsedCount;
+
+      if (spread !== null) {
+        if (spread > 10 && spread <= 20) {
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary 10–20%: manual review recommended.");
+        } else if (spread > 20) {
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Sources vary >20%: conservative adjustment applied; manual review required.");
+          base = base * 0.90;
+        }
+      }
+
+      const safetyMarginPct = limitedDataSafetyMarginPct(srcCount);
+      let safetyAdjUSD = 0;
+      if (safetyMarginPct !== null && safetyMarginPct < 0) {
+        safetyAdjUSD = base * safetyMarginPct;
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Limited data (1–2 sources): applied 15% safety margin; manual review recommended.");
+      }
+
+      let conditionAdjUSD = inputs.conditionAdjustmentsUSD ?? null;
+      if (conditionAdjUSD === null) {
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Condition adjustment missing: manual review recommended.");
+        conditionAdjUSD = 0;
+      }
+
+      let hoursAdjPct = null;
+      let hoursAdjUSD = 0;
+      if (inputs.hours !== null && inputs.equipmentTypeBucket && LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket]) {
+        const life = LIFESPAN_BY_TYPE[inputs.equipmentTypeBucket].lifespan;
+        hoursAdjPct = hoursPenaltyPct(inputs.hours, life);
+        hoursAdjUSD = (base + safetyAdjUSD + conditionAdjUSD) * (hoursAdjPct || 0);
+      } else {
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Hours and/or equipment type not available: hours depreciation skipped; manual review recommended.");
+      }
+
+      const region = inputs.region || "Mountain West";
+      const regionMult = REGION_MULTIPLIERS[region] ?? 1.00;
+      const geoAdjUSD = (base + safetyAdjUSD) * (regionMult - 1.0);
+
+      const seasonAdjUSD = (base + safetyAdjUSD) * currentSeasonAdjustmentPct();
+
+      const satPct = saturationPenaltyPct(inputs.inventoryCount);
+      let satAdjUSD = 0;
+      if (satPct !== null) {
+        satAdjUSD = (base + safetyAdjUSD) * satPct;
+        if (inputs.inventoryCount > 6) {
+          decision = "FLAG"; flags.push("MANUAL_REVIEW");
+          notes.push("Inventory >6: saturation risk; manual review recommended.");
+        }
+      } else {
+        notes.push("Inventory count missing: saturation rule skipped.");
+      }
+
+      let distAdjUSD = 0;
+      const distAdj = distanceAdjustmentUSD(inputs.distanceMiles);
+      if (distAdj === null && inputs.distanceMiles !== null) {
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Distance >800 miles: manual review recommended (transport risk).");
+      } else if (distAdj !== null) {
+        distAdjUSD = distAdj;
+      } else {
+        notes.push("Distance missing: transport adjustment skipped.");
+      }
+
+      const riskAdjUSD = inputs.riskAdjustmentsUSD ?? 0;
+      if (inputs.riskFlags?.includes("STRUCTURAL_DAMAGE")) {
+        decision = "FLAG"; flags.push("MANUAL_REVIEW");
+        notes.push("Structural damage risk: expert inspection recommended (may be decline).");
+      }
+
+      const titlePctUSD = (base + safetyAdjUSD) * (titleAdjPct || 0);
+
+      const projectedRetailUSD = Math.max(0, Math.round(base + safetyAdjUSD + geoAdjUSD));
+
+      const wholesaleRaw =
+        (base + safetyAdjUSD + geoAdjUSD) +
+        conditionAdjUSD +
+        hoursAdjUSD +
+        seasonAdjUSD +
+        satAdjUSD +
+        riskAdjUSD +
+        titleAdjUSD +
+        titlePctUSD +
+        distAdjUSD;
+
+      // Wholesale target must never exceed (1 - BFI_MIN_GROSS_MARGIN) of projected retail
+      const wholesaleTargetUSD = Math.max(0, Math.min(Math.round(projectedRetailUSD * (1 - BFI_MIN_GROSS_MARGIN)), Math.round(wholesaleRaw)));
+
+      const asking = inputs.askingPriceUSD;
+      const recon = inputs.reconditioningUSD ?? null;
+
+      let transportCostUSD = null;
+      if (inputs.distanceMiles !== null && !isNaN(inputs.distanceMiles)) {
+        if (inputs.distanceMiles <= 100) transportCostUSD = 650;
+        else if (inputs.distanceMiles <= 300) transportCostUSD = 1500;
+        else if (inputs.distanceMiles <= 500) transportCostUSD = 2750;
+        else if (inputs.distanceMiles <= 800) transportCostUSD = 4250;
+      }
+
+      let totalInvestmentUSD = null;
+      let netProfitUSD = null;
+      let profitMarginPct = null;
+
+      let usingEstimatedProfit = false;
+      if (asking !== null) {
+        const tCost = transportCostUSD ?? 0;
+        const rCost = recon ?? 0;
+        totalInvestmentUSD = asking + tCost + rCost;
+        netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
+        profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
+      } else if (wholesaleTargetUSD > 0 && projectedRetailUSD > 0) {
+        usingEstimatedProfit = true;
+        const tCost = transportCostUSD ?? 0;
+        const rCost = recon ?? 0;
+        totalInvestmentUSD = wholesaleTargetUSD + tCost + rCost;
+        netProfitUSD = projectedRetailUSD - totalInvestmentUSD;
+        profitMarginPct = totalInvestmentUSD > 0 ? (netProfitUSD / totalInvestmentUSD) : null;
+        notes.push("Asking price missing: profit estimated from BFI wholesale target vs. projected retail.");
+      } else {
+        notes.push("Asking price missing: profit and priority score limited.");
+      }
+      const score = priorityScore({
+        profitMarginPct,
+        absoluteProfitUSD: netProfitUSD,
+        confidencePct: inputs.aiConfidencePct ?? 0,
+        marketVelocityScore: inputs.marketVelocityScore ?? 50,
+        daysOnMarket: inputs.daysOnMarket
+      });
+
+      return {
+        decision, notes, flags,
+        breakdown: {
+          baseMarketValueUSD: Math.round(base),
+          safetyMarginAdjUSD: Math.round(safetyAdjUSD),
+          geoRegion: region,
+          geoMultiplier: regionMult,
+          geoAdjUSD: Math.round(geoAdjUSD),
+          conditionTier: inputs.conditionTier || "Unknown",
+          conditionAdjUSD: Math.round(conditionAdjUSD),
+          hours: inputs.hours,
+          equipmentTypeBucket: inputs.equipmentTypeBucket || "Unknown",
+          hoursAdjPct,
+          hoursAdjUSD: Math.round(hoursAdjUSD),
+          season: seasonName(),
+          seasonAdjUSD: Math.round(seasonAdjUSD),
+          inventoryCount: inputs.inventoryCount,
+          saturationAdjUSD: Math.round(satAdjUSD),
+          distanceMiles: inputs.distanceMiles,
+          distanceAdjUSD: Math.round(distAdjUSD),
+          titleStatus: inputs.titleStatus || "Unknown",
+          titleAdjUSD: Math.round(titleAdjUSD + titlePctUSD),
+          riskAdjUSD: Math.round(riskAdjUSD),
+          projectedRetailUSD,
+          wholesaleTargetUSD
+        },
+        deal: {
+          askingPriceUSD: asking,
+          transportCostUSD,
+          reconditioningUSD: recon,
+          totalInvestmentUSD,
+          netProfitUSD,
+          profitMarginPct,
+          usingEstimatedProfit,
+          priorityScore: score,
+          priorityTier: priorityTier(score)
+        }
+      };
+    }
+
+    // -------------------------
+    // Generate
+    // -------------------------
+    generateButton.addEventListener('click', async () => {
+      if (!API_KEY) { showMessage("API Key is missing. Please set your new API key.", 'error'); return; }
+      if (!isAuthReady) { showMessage("Database status unknown. Please wait a moment.", 'error'); return; }
+      if (!selectedFiles.length) { showMessage("Add at least one photo.", 'error'); return; }
+
+      showMessage("Generating report... analyzing photos and pulling grounded listing/market data.", 'info');
+      generateButton.disabled = true;
+      downloadButton.classList.add('hidden');
+      reportContainer.style.display = 'none';
+      reportData = null;
+
+      originalFiles = [...selectedFiles];
+
+      try {
+        showMessage("Step 1/3: preparing images...", 'info');
+        const resizedFiles = await Promise.all(originalFiles.map(f => resizeForModel(f)));
+
+        const base64Images = await Promise.all(resizedFiles.map(file => new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onloadend = () => {
+            const dataUrl = r.result;
+            const b64 = dataUrl.split(',')[1];
+            resolve({ data: b64, mimeType: 'image/jpeg' });
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        })));
+
+        // User fields
+        const userAsking = safeNum(askingPriceEl.value);
+        const userHours = safeNum(hoursEl.value);
+        const region = regionEl.value || null;
+        const distanceMiles = safeNum(distanceEl.value);
+        const daysOnMarket = safeNum(domEl.value);
+        const inventoryCount = safeNum(inventoryEl.value);
+        const titleStatus = titleEl.value || null;
+
+        const userNotes = (notesInput.value || "").trim();
+
+        // Listing URL: explicit field first; otherwise try to extract from notes
+        let listingUrl = (listingUrlEl.value || "").trim();
+        if (!listingUrl) listingUrl = extractUrlFromText(userNotes);
+
+        showMessage("Step 2/3: calling model...", 'info');
+
+        // Prompt: includes a dedicated "listing" object, and instructs URL-first extraction with fallback to indexed mirrors.
+        const reportPrompt = `
+You are a heavy equipment inspector + valuation analyst for Bona Fide Iron.
+
+Core goals:
+1) Identify the equipment from photos.
+2) Extract listing details (asking price, hours, location, description) IF a listing URL is provided.
+   - IMPORTANT: Try to use the exact listing URL first.
+   - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
+   - If still not reliable, set fields to null (do not guess).
+3) Estimate Base Market Value using grounded search comps. PRIORITIZE actual sold/hammer prices over asking prices.
+4) Find up to 8 real comparable listings for this machine (same make/model, nearby years) using Google Search grounding. Include the subject machine itself as the first entry.
+
+PREFERRED PRICING SOURCES (search these first, in priority order):
+- Ritchie Bros. Price Results: rbauction.com/equipment-values-auction-results (actual sold prices)
+- IronPlanet auction results: ironplanet.com (actual sold prices with inspection ratings)
+- AuctionValues.com (aggregated actual auction results)
+- Construction Equipment Guide auction results: constructionequipmentguide.com/auction-results (10 years of actual sale prices)
+- Equipmentfacts.com (live and onsite auction results)
+- MachineryTrader.com (current asking prices — use if sold data unavailable)
+- TractorHouse.com (current asking prices — use if sold data unavailable)
+- Machinio.com (current asking prices — use if sold data unavailable)
+
+When reporting comps, note whether the price is a SOLD price (auction result) or ASKING price (listing). Set the "source" field to include this — e.g. "Ritchie Bros. (sold)" or "MachineryTrader (asking)".
+
+Return ONLY clean JSON (no markdown) in the exact schema below.
+Rules:
+- If a field cannot be determined from photos + notes + grounded search, set it to null.
+- Money must be NUMBERS in USD (no $, no commas, no ranges).
+- Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
+- Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
+- For comps: only include entries where you have a real price (not "call for price"). Convert foreign currency to USD if needed.
+- PREFER sold/auction prices over asking prices for baseMarketValueUSD. If using only asking prices, apply a 10-15% discount to estimate realistic transaction price.
+
+SCHEMA:
+{
+  "listing": {
+    "listingUrl": "string|null",
+    "askingPriceUSD": "number|null",
+    "hours": "number|null",
+    "location": "string|null",
+    "stockNumber": "string|null",
+    "serialNumber": "string|null",
+    "description": "string|null",
+    "listingExtractionConfidence": "string|null",
+    "listingSourcesUsedCount": "number|null",
+    "listingSourcesSpreadPct": "number|null"
+  },
+  "equipment": {
+    "category": "string (e.g., Excavator, Skid Steer, Dozer, Wheel Loader, Backhoe, Track Loader)",
+    "make": "string|null",
+    "model": "string|null",
+    "year": "number|null",
+    "serialNumber": "string|null",
+    "configuration": "string|null",
+    "attachments": "string|null"
+  },
+  "market": {
+    "baseMarketValueUSD": "number|null",
+    "sourcesUsedCount": "number|null",
+    "sourcesSpreadPct": "number|null",
+    "marketVelocityScore": "number|null",
+    "comps": [
+      {
+        "isSubject": "boolean",
+        "year": "number|null",
+        "make": "string|null",
+        "model": "string|null",
+        "hours": "number|null",
+        "priceUSD": "number|null",
+        "config": "string|null",
+        "source": "string|null"
+      }
+    ]
+  },
+  "condition": {
+    "conditionTier": "string|null (Excellent|Good|Fair|Poor|Unknown)",
+    "conditionConfidencePct": "number|null",
+    "conditionFindings": "string|null",
+    "conditionAdjustmentsUSD": "number|null"
+  },
+  "hours": {
+    "reportedHours": "number|null",
+    "recentOverhaulWithin500hrs": "boolean|null"
+  },
+  "risks": {
+    "riskSummary": "string|null",
+    "riskFlags": "array (strings)",
+    "riskAdjustmentsUSD": "number|null"
+  },
+  "reconditioning": {
+    "estimatedReconditioningUSD": "number|null",
+    "reconditioningNotes": "string|null"
+  },
+  "disclaimer": "string"
+}
+
+RISK FLAGS examples:
+- "ENGINE_ISSUES"
+- "HYDRAULIC_ISSUES"
+- "TRANSMISSION_ISSUES"
+- "STRUCTURAL_DAMAGE"
+- "ELECTRICAL_ISSUES"
+- "EMISSIONS_ISSUES"
+- "RECALL_ACTIVE"
+- "TITLE_PROBLEM"
+`;
+
+        const payload = {
+          contents: [{
+            parts: [
+              { text: reportPrompt },
+              { text: `Listing URL (may be null): ${listingUrl || "null"}` },
+              { text: `User-entered listing fields (may be null): askingPriceUSD=${userAsking}, hours=${userHours}, region=${region}, distanceMiles=${distanceMiles}, daysOnMarket=${daysOnMarket}, inventoryCountSameModel=${inventoryCount}, titleStatus=${titleStatus}` },
+              { text: `User Notes: ${userNotes}` },
+              ...base64Images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
+            ]
+          }],
+          tools: [{ "google_search": {} }]
+        };
+
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+        const resp = await fetch(apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+
+        if (!resp.ok) {
+          const t = await resp.text();
+          throw new Error(`API Error ${resp.status}: ${t}`);
+        }
+
+        const result = await resp.json();
+        let jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error("Model returned empty response.");
+
+        // Extract grounding sources
+        let sources = [];
+        const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
+        if (groundingMetadata?.groundingAttributions) {
+          sources = groundingMetadata.groundingAttributions
+            .map(a => ({ uri: a.web?.uri, title: a.web?.title }))
+            .filter(s => s.uri && s.title);
+        }
+
+        // Parse JSON
+        jsonText = jsonText.trim();
+        const firstBrace = jsonText.indexOf('{');
+        const lastBrace = jsonText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) jsonText = jsonText.slice(firstBrace, lastBrace+1);
+
+        let report;
+        try { report = JSON.parse(jsonText); }
+        catch (e) { console.error("Bad JSON:", jsonText); throw new Error("JSON parsing failed (model returned malformed JSON)."); }
+
+        report.sources = sources;
+
+        // Decide final asking/hours: user-entered wins; otherwise use listing extraction if confident enough
+        const modelAsking = safeNum(report?.listing?.askingPriceUSD);
+        // Separate listing-extracted hours (URL-dependent) from photo-extracted hours (always available)
+        const listingHours = safeNum(report?.listing?.hours);
+        const photoHours = safeNum(report?.hours?.reportedHours);
+
+        const listingConfidence = (report?.listing?.listingExtractionConfidence || "").toLowerCase();
+        const allowListingFill = (listingConfidence === "high" || listingConfidence === "medium");
+
+        const finalAsking = (userAsking !== null) ? userAsking : (allowListingFill ? modelAsking : null);
+        // Photo hours are always trusted; listing hours only used when listing confidence is high/medium
+        const modelHours = (allowListingFill ? listingHours : null) ?? photoHours;
+        const finalHours = (userHours !== null) ? userHours : modelHours;
+
+        // If both exist and differ wildly, flag manual review
+        let listingMismatchFlag = false;
+        if (userAsking !== null && modelAsking !== null) {
+          const diffPct = Math.abs(userAsking - modelAsking) / Math.max(1, userAsking);
+          if (diffPct > 0.10) listingMismatchFlag = true; // >10% mismatch
+        }
+
+        // Map category -> rule bucket
+        const category = report?.equipment?.category || null;
+        function mapBucket(cat) {
+          if (!cat) return null;
+          const c = cat.toLowerCase();
+          if (c.includes("excavator")) return "Excavator (standard)";
+          if (c.includes("dozer")) return "Dozer";
+          if (c.includes("wheel") && c.includes("loader")) return "Wheel loader";
+          if (c.includes("track") && c.includes("loader")) return "Track loader";
+          if (c.includes("backhoe")) return "Backhoe";
+          if (c.includes("skid")) return "Skid steer";
+          return null;
+        }
+
+        // Merge listing-derived data quality into market variance logic (optional)
+        // If listing extraction is low confidence and user didn't provide asking/hours, we flag review.
+        const engineNotesExtra = [];
+        if (listingUrl && !allowListingFill && (userAsking === null || userHours === null)) {
+          engineNotesExtra.push("Listing URL provided, but listing extraction confidence is Low: manual entry recommended for asking price/hours.");
+        }
+        if (listingMismatchFlag) {
+          engineNotesExtra.push("User-entered asking price differs materially from extracted asking price: manual review recommended.");
+        }
+
+        const engineInputs = {
+          baseMarketValueUSD: safeNum(report?.market?.baseMarketValueUSD),
+          sourcesUsedCount: safeNum(report?.market?.sourcesUsedCount),
+          sourcesSpreadPct: safeNum(report?.market?.sourcesSpreadPct),
+          conditionTier: report?.condition?.conditionTier || null,
+          conditionConfidencePct: safeNum(report?.condition?.conditionConfidencePct),
+          conditionAdjustmentsUSD: safeNum(report?.condition?.conditionAdjustmentsUSD),
+          equipmentTypeBucket: mapBucket(category),
+          hours: finalHours,
+          region: region ?? null,
+          distanceMiles,
+          inventoryCount,
+          daysOnMarket,
+          titleStatus,
+          reconditioningUSD: safeNum(report?.reconditioning?.estimatedReconditioningUSD),
+          riskAdjustmentsUSD: safeNum(report?.risks?.riskAdjustmentsUSD),
+          riskFlags: Array.isArray(report?.risks?.riskFlags) ? report.risks.riskFlags : [],
+          marketVelocityScore: safeNum(report?.market?.marketVelocityScore),
+          aiConfidencePct: safeNum(report?.condition?.conditionConfidencePct) ?? 0,
+          askingPriceUSD: finalAsking
+        };
+
+        const computed = computeBFIValuation(engineInputs);
+
+        // Inject extra notes/flags if needed
+        if (engineNotesExtra.length) {
+          computed.notes = [...engineNotesExtra, ...(computed.notes || [])];
+          computed.flags = Array.from(new Set([...(computed.flags || []), "MANUAL_REVIEW"]));
+          computed.decision = (computed.decision === "DECLINE") ? "DECLINE" : "FLAG";
+        }
+
+        reportData = { raw: report, computed };
+
+        // Render report
+        reportMeta.textContent = `Generated: ${new Date().toLocaleString()} • Season: ${seasonName()} • Decision: ${computed.decision}`;
+
+        const b = computed.breakdown;
+        const d = computed.deal;
+
+        const declineBanner = computed.decision === "DECLINE"
+          ? `<div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">
+              <div class="font-bold text-lg">DECLINE</div>
+              <div class="text-sm">A rule gate triggered a decline decision (e.g., title).</div>
+            </div>`
+          : "";
+
+        const flagBanner = computed.decision === "FLAG"
+          ? `<div class="p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-900">
+              <div class="font-bold text-lg">Manual Review Recommended</div>
+              <div class="text-sm">One or more rule gates were triggered (limited data, high variance, missing inputs, listing extraction uncertainty, etc.).</div>
+            </div>`
+          : "";
+
+        const sourcesHtml = (report.sources && report.sources.length)
+          ? `<div class="text-xs text-gray-500 space-y-1">
+              <div class="font-semibold text-gray-700">Grounded Sources (from model):</div>
+              ${report.sources.slice(0,10).map(s => `<div>• ${s.title}</div>`).join('')}
+            </div>`
+          : `<div class="text-xs text-gray-500">No source metadata returned by the model.</div>`;
+
+        const notesList = (computed.notes && computed.notes.length)
+          ? `<ul class="list-disc pl-5 text-sm text-gray-700 space-y-1">${computed.notes.map(n => `<li>${n}</li>`).join('')}</ul>`
+          : `<div class="text-sm text-gray-600">No additional notes.</div>`;
+
+        const listingBlock = `
+          <div class="p-4 bg-gray-50 rounded-xl border">
+            <div class="text-sm text-gray-500">Listing Extraction</div>
+            <div class="text-sm text-gray-800 mt-1">
+              <div><strong>URL:</strong> ${report.listing?.listingUrl ?? (listingUrl || "None")}</div>
+              <div><strong>Extraction Confidence:</strong> ${report.listing?.listingExtractionConfidence ?? "N/A"}</div>
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="flex justify-between"><span>Asking (Final)</span><span class="font-semibold">${fmtUSD(finalAsking)}</span></div>
+                <div class="flex justify-between"><span>Hours (Final)</span><span class="font-semibold">${finalHours ?? "N/A"}</span></div>
+                <div class="flex justify-between"><span>Asking (Extracted)</span><span class="font-semibold">${fmtUSD(safeNum(report.listing?.askingPriceUSD))}</span></div>
+                <div class="flex justify-between"><span>Hours (Extracted)</span><span class="font-semibold">${safeNum(report.listing?.hours) ?? safeNum(report.hours?.reportedHours) ?? "N/A"}</span></div>
+              </div>
+              <div class="text-xs text-gray-500 mt-2">
+                If extracted values are missing or low-confidence, enter them manually for best results.
+              </div>
+            </div>
+          </div>
+        `;
+
+        const idBlock = `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-4 bg-gray-50 rounded-xl">
+              <div class="text-sm text-gray-500">Equipment</div>
+              <div class="text-lg font-bold text-gray-900">${(report.equipment?.year ?? "Year?")} ${(report.equipment?.make ?? "Make?")} ${(report.equipment?.model ?? "Model?")}</div>
+              <div class="text-sm text-gray-700">${report.equipment?.category ?? "Category?"}${report.equipment?.configuration ? " • " + report.equipment.configuration : ""}</div>
+              <div class="text-xs text-gray-500 mt-2">Serial: ${report.equipment?.serialNumber ?? report.listing?.serialNumber ?? "Unknown"}</div>
+              <div class="text-xs text-gray-500">Attachments: ${report.equipment?.attachments ?? "Unknown"}</div>
+            </div>
+
+            <div class="p-4 bg-gray-50 rounded-xl">
+              <div class="text-sm text-gray-500">Condition</div>
+              <div class="text-lg font-bold text-gray-900">${report.condition?.conditionTier ?? "Unknown"}</div>
+              <div class="text-sm text-gray-700">${report.condition?.conditionFindings ?? "No condition notes provided."}</div>
+              <div class="text-xs text-gray-500 mt-2">Condition confidence: ${report.condition?.conditionConfidencePct ?? "N/A"}%</div>
+            </div>
+          </div>
+        `;
+
+        const valuationBlock = `
+          <div class="p-4 rounded-2xl border bg-green-50">
+            <div class="text-lg font-bold text-gray-900 mb-2">Valuation Summary</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="flex justify-between">
+                <span class="text-gray-700">Projected Retail (market)</span>
+                <span class="font-bold text-green-700 no-break">${fmtUSD(b.projectedRetailUSD)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-700">Wholesale Target (our offer)</span>
+                <span class="font-bold text-blue-700 no-break">${fmtUSD(b.wholesaleTargetUSD)}</span>
+              </div>
+            </div>
+            <div class="text-xs text-gray-600 mt-2">
+              Retail tracks base market value; offer reflects BFI rule adjustments (condition, hours, geo, season, saturation, risk, transport).
+            </div>
+          </div>
+        `;
+
+        const breakdownTable = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-3">Valuation Breakdown (Rule Engine)</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <div class="flex justify-between"><span>Base Market Value</span><span class="font-semibold">${fmtUSD(b.baseMarketValueUSD)}</span></div>
+              <div class="flex justify-between"><span>Safety Margin</span><span class="font-semibold">${fmtUSD(b.safetyMarginAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Geo Region / Multiplier</span><span class="font-semibold">${b.geoRegion} (${b.geoMultiplier})</span></div>
+              <div class="flex justify-between"><span>Geo Adjustment</span><span class="font-semibold">${fmtUSD(b.geoAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Condition Tier</span><span class="font-semibold">${b.conditionTier}</span></div>
+              <div class="flex justify-between"><span>Condition Adjustment</span><span class="font-semibold">${fmtUSD(b.conditionAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Hours / Type</span><span class="font-semibold">${b.hours ?? "Unknown"} / ${b.equipmentTypeBucket}</span></div>
+              <div class="flex justify-between"><span>Hours Adjustment</span><span class="font-semibold">${(b.hoursAdjPct===null ? "N/A" : Math.round(b.hoursAdjPct*100)+"%")} (${fmtUSD(b.hoursAdjUSD)})</span></div>
+
+              <div class="flex justify-between"><span>Season</span><span class="font-semibold">${b.season}</span></div>
+              <div class="flex justify-between"><span>Season Adjustment</span><span class="font-semibold">${fmtUSD(b.seasonAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Inventory (same model)</span><span class="font-semibold">${b.inventoryCount ?? "Unknown"}</span></div>
+              <div class="flex justify-between"><span>Saturation Adjustment</span><span class="font-semibold">${fmtUSD(b.saturationAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Distance (mi)</span><span class="font-semibold">${b.distanceMiles ?? "Unknown"}</span></div>
+              <div class="flex justify-between"><span>Distance Adjustment</span><span class="font-semibold">${fmtUSD(b.distanceAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Title Status</span><span class="font-semibold">${b.titleStatus}</span></div>
+              <div class="flex justify-between"><span>Title Adjustment</span><span class="font-semibold">${fmtUSD(b.titleAdjUSD)}</span></div>
+
+              <div class="flex justify-between"><span>Risk Adjustments</span><span class="font-semibold">${fmtUSD(b.riskAdjUSD)}</span></div>
+              <div class="flex justify-between"><span class="font-bold">Wholesale Target</span><span class="font-bold">${fmtUSD(b.wholesaleTargetUSD)}</span></div>
+            </div>
+          </div>
+        `;
+
+        const dealBlock = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-3">Deal Analysis</div>
+            ${d.usingEstimatedProfit ? `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">No asking price entered — profit figures estimated from BFI wholesale target vs. projected retail.</div>` : ''}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <div class="flex justify-between"><span>Seller Asking</span><span class="font-semibold">${d.askingPriceUSD !== null ? fmtUSD(d.askingPriceUSD) : (d.usingEstimatedProfit ? `${fmtUSD(b.wholesaleTargetUSD)} <span class="text-amber-600 text-xs">(BFI offer)</span>` : 'N/A')}</span></div>
+              <div class="flex justify-between"><span>Transport Cost</span><span class="font-semibold">${fmtUSD(d.transportCostUSD)}</span></div>
+              <div class="flex justify-between"><span>Reconditioning</span><span class="font-semibold">${fmtUSD(d.reconditioningUSD)}</span></div>
+              <div class="flex justify-between"><span>Total Investment</span><span class="font-semibold">${fmtUSD(d.totalInvestmentUSD)}</span></div>
+              <div class="flex justify-between"><span>Projected Retail</span><span class="font-semibold">${fmtUSD(b.projectedRetailUSD)}</span></div>
+              <div class="flex justify-between"><span>Net Profit${d.usingEstimatedProfit ? ' <span class="text-amber-600 text-xs">(Est.)</span>' : ''}</span><span class="font-semibold">${fmtUSD(d.netProfitUSD)}</span></div>
+              <div class="flex justify-between"><span>Profit Margin${d.usingEstimatedProfit ? ' <span class="text-amber-600 text-xs">(Est.)</span>' : ''}</span><span class="font-semibold">${(d.profitMarginPct==null ? "N/A" : (Math.round(d.profitMarginPct*1000)/10)+"%")}</span></div>
+              <div class="flex justify-between"><span>Priority</span><span class="font-bold">${d.priorityScore ?? "N/A"} — ${d.priorityTier ?? ""}</span></div>
+            </div>
+          </div>
+        `;
+
+        const riskBlock = `
+          <div class="p-4 rounded-2xl border bg-white">
+            <div class="text-lg font-bold text-gray-900 mb-2">Risks & Notes</div>
+            <div class="text-sm text-gray-700">${report.risks?.riskSummary ?? "No risk summary provided."}</div>
+            <div class="mt-2">${notesList}</div>
+          </div>
+        `;
+
+        // ---- Market Comps Block ----
+        const comps = report?.market?.comps;
+        let compsBlock = '';
+        if (comps && comps.length > 0) {
+          const chartId = 'comps-chart-' + Date.now();
+
+          // Inject projected retail into subject comp so it appears on chart and table
+          const compsWithSubjectPrice = comps.map(c => {
+            if (c.isSubject && (c.priceUSD === null || c.priceUSD === undefined)) {
+              return Object.assign({}, c, { priceUSD: b.projectedRetailUSD, priceIsEstimate: true });
+            }
+            return c;
+          });
+
+          const subjectComp = compsWithSubjectPrice.find(c => c.isSubject);
+          const otherComps = compsWithSubjectPrice.filter(c => !c.isSubject && c.hours !== null && c.priceUSD !== null);
+          const lowHrs  = otherComps.filter(c => c.hours < 2000);
+          const midHrs  = otherComps.filter(c => c.hours >= 2000 && c.hours < 5000);
+          const highHrs = otherComps.filter(c => c.hours >= 5000);
+          const toPoint = c => ({ x: c.hours, y: c.priceUSD });
+
+          const tableRows = compsWithSubjectPrice.map(c => {
+            const rowBg = c.isSubject ? 'background:#EFF6FF;' : '';
+            const badge = c.isSubject
+              ? '<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:4px;background:#BFDBFE;color:#1E40AF;font-weight:500;margin-left:6px;">subject</span>'
+              : '';
+            const priceLabel = c.priceUSD
+              ? '$' + c.priceUSD.toLocaleString() + (c.priceIsEstimate ? ' <span style="font-size:10px;color:#6B7280;">(est. retail)</span>' : '')
+              : 'N/A';
+            const hrs = c.hours !== null ? c.hours.toLocaleString() : 'N/A';
+            return '<tr style="' + rowBg + '">'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;">' + (c.year || '?') + ' ' + (c.make || '') + ' ' + (c.model || '') + badge + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;">' + hrs + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-size:12px;color:#6B7280;">' + (c.config || '&mdash;') + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-weight:600;">' + priceLabel + '</td>'
+              + '<td style="padding:6px 10px;border-bottom:0.5px solid #E5E7EB;font-size:12px;color:#6B7280;">' + (c.source || '&mdash;') + '</td>'
+              + '</tr>';
+          }).join('');
+
+          compsBlock = ''
+            + '<div id="comps-block" class="p-4 rounded-2xl border bg-white">'
+            + '<div class="text-lg font-bold text-gray-900 mb-3">Market Comps</div>'
+            + '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#6B7280;margin-bottom:10px;">'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B82F6;display:inline-block;"></span>Subject</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#16A34A;display:inline-block;"></span>Low hrs (&lt;2,000)</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#D97706;display:inline-block;"></span>Mid hrs (2,000-5,000)</span>'
+            + '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#DC2626;display:inline-block;"></span>High hrs (&gt;5,000)</span>'
+            + '</div>'
+            + '<div style="position:relative;width:100%;height:240px;margin-bottom:16px;"><canvas id="' + chartId + '"></canvas></div>'
+            + '<div style="overflow-x:auto;">'
+            + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            + '<thead><tr style="border-bottom:1px solid #E5E7EB;">'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Machine</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Hours</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Config</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Price</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Source</th>'
+            + '</tr></thead>'
+            + '<tbody>' + tableRows + '</tbody>'
+            + '</table></div></div>';
+
+          // Chart init deferred — cannot inject script tags via innerHTML
+          const chartIdRef = chartId;
+          const subjectData = subjectComp && subjectComp.hours !== null && subjectComp.priceUSD !== null ? [toPoint(subjectComp)] : [];
+          const lowData  = lowHrs.map(toPoint);
+          const midData  = midHrs.map(toPoint);
+          const highData = highHrs.map(toPoint);
+
+          setTimeout(() => {
+            const el = document.getElementById(chartIdRef);
+            if (!el || typeof Chart === 'undefined') return;
+            new Chart(el, {
+              type: 'scatter',
+              data: {
+                datasets: [
+                  { label: 'Subject', data: subjectData, backgroundColor: '#3B82F6', pointRadius: 10, pointHoverRadius: 12 },
+                  { label: 'Low hrs', data: lowData,    backgroundColor: '#16A34A', pointRadius: 7 },
+                  { label: 'Mid hrs', data: midData,    backgroundColor: '#D97706', pointRadius: 7 },
+                  { label: 'High hrs', data: highData,  backgroundColor: '#DC2626', pointRadius: 7 }
+                ]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: function(ctx) { return ctx.raw.x.toLocaleString() + ' hrs - $' + ctx.raw.y.toLocaleString(); } } }
+                },
+                scales: {
+                  x: { title: { display: true, text: 'Hours' }, ticks: { callback: function(v) { return v.toLocaleString(); } } },
+                  y: { title: { display: true, text: 'Price (USD)' }, ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } } }
+                }
+              }
+            });
+          }, 100);
+        }
+
+
+        const disclaimerBlock = `
+          <div class="p-4 mt-2 bg-yellow-50 text-sm text-yellow-900 rounded-xl border border-yellow-100">
+            <strong>Disclaimer:</strong> ${report.disclaimer ?? "This report is an estimate based on photos, notes, and grounded market data. Verify condition, title, and hours before purchase."}
+          </div>
+        `;
+
+        reportContent.innerHTML = `
+          ${declineBanner}
+          ${flagBanner}
+          ${listingBlock}
+          ${idBlock}
+          ${valuationBlock}
+          ${breakdownTable}
+          ${dealBlock}
+          ${riskBlock}
+          ${compsBlock}
+          <div class="p-4 rounded-2xl border bg-gray-50">${sourcesHtml}</div>
+          ${disclaimerBlock}
+        `;
+
+        reportContainer.style.display = 'block';
+        downloadButton.classList.remove('hidden');
+
+        showMessage("Report generated successfully! (Step 3/3 complete)", 'info');
+
+        if (db && userId) {
+          try {
+            const reportRef = doc(db, `artifacts/${appId}/users/${userId}/reports/${Date.now()}`);
+            await setDoc(reportRef, reportData);
+          } catch (e) {
+            console.error("Save failed:", e);
+            showMessage("Report generated, but failed to save to database.", 'warning');
+          }
+        }
+
+      } catch (err) {
+        console.error(err);
+        showMessage(`Failed to generate report: ${err.message}`, 'error');
+        reportData = null;
+      } finally {
+        generateButton.disabled = false;
+      }
+    });
+
+    // -------------------------
+    // PDF download
+    // -------------------------
+    downloadButton.addEventListener('click', async () => {
+      const { jsPDF } = window.jspdf;
+      const reportElement = document.getElementById('report-container');
+      if (!reportData) { showMessage("No report to download yet.", 'error'); return; }
+
+      showMessage("Preparing PDF for download...", 'info');
+      downloadButton.disabled = true;
+
+      const addFooter = (doc, margin, pageHeight) => {
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.setFont("helvetica", "normal");
+        doc.text("BonaFideIron.com", margin, pageHeight - 5);
+      };
+
+      try {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+
+        // Page 1: report — hide comps block so it doesn't appear here
+        const compsEl = document.getElementById('comps-block');
+        if (compsEl) compsEl.style.display = 'none';
+
+        const canvas = await html2canvas(reportElement, { scale: 2 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const imgW = pageWidth - margin * 2;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        doc.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
+        addFooter(doc, margin, pageHeight);
+
+        // Page 2: comps chart + table (if present)
+        if (compsEl) {
+          compsEl.style.display = 'block';
+          doc.addPage();
+          doc.setFontSize(14);
+          doc.setTextColor(0);
+          doc.text("Market Comps", margin, margin + 4);
+          addFooter(doc, margin, pageHeight);
+
+          const compsCanvas = await html2canvas(compsEl, { scale: 2 });
+          const compsImgData = compsCanvas.toDataURL('image/jpeg', 0.85);
+          const compsImgW = pageWidth - margin * 2;
+          const compsImgH = (compsCanvas.height * compsImgW) / compsCanvas.width;
+          doc.addImage(compsImgData, 'JPEG', margin, margin + 10, compsImgW, compsImgH);
+        }
+
+        // Page 3+: Reference images — 25% smaller (~57mm wide, fits 3 per row)
+        if (originalFiles.length) {
+          doc.addPage();
+          let y = margin;
+          doc.setFontSize(16);
+          doc.setTextColor(0);
+          doc.text("Reference Images", margin, y);
+          y += 10;
+          addFooter(doc, margin, pageHeight);
+
+          const imgTargetWidthMm = 57; // 76 * 0.75 = ~57mm
+          const pad = 5;
+          const col2x = margin + imgTargetWidthMm + pad;
+          const col3x = col2x + imgTargetWidthMm + pad;
+
+          for (let i = 0; i < originalFiles.length; i++) {
+            const file = originalFiles[i];
+            const r = new FileReader();
+            r.readAsDataURL(file);
+            await new Promise(res => r.onloadend = res);
+
+            const url = r.result;
+            const img = new Image();
+            img.src = url;
+            await new Promise(res => img.onload = res);
+            const hMm = imgTargetWidthMm * (img.height / img.width);
+
+            const col = i % 3;
+            const x = col === 0 ? margin : col === 1 ? col2x : col3x;
+
+            if (col === 0 && i > 0) y += hMm + pad;
+
+            if (y + hMm > pageHeight - margin - 10) {
+              doc.addPage();
+              y = margin;
+              doc.setFontSize(16);
+              doc.text("Reference Images (Cont.)", margin, y);
+              y += 10;
+              addFooter(doc, margin, pageHeight);
+            }
+
+            doc.addImage(url, 'JPEG', x, y, imgTargetWidthMm, hMm, undefined, 'FAST');
+          }
+        }
+
+        const make = reportData?.raw?.equipment?.make ?? "Equipment";
+        const model = reportData?.raw?.equipment?.model ?? "Report";
+        const dateStr = new Date().toISOString().split('T')[0];
+        const fname = `${String(make).replace(/\s+/g,'_')}_${String(model).replace(/\s+/g,'_')}_${dateStr}_BFI_Report.pdf`;
+
+        doc.save(fname);
+        showMessage("PDF download started!", 'info');
+      } catch (e) {
+        console.error(e);
+        showMessage("Failed to generate PDF. Please try again.", 'error');
+      } finally {
+        downloadButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
