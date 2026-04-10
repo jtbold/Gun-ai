@@ -545,8 +545,9 @@
           notes.push("Sources vary 10–20%: manual review recommended.");
         } else if (spread > 20) {
           decision = "FLAG"; flags.push("MANUAL_REVIEW");
-          notes.push("Sources vary >20%: conservative adjustment applied; manual review required.");
-          base = base * 0.90;
+          notes.push("Sources vary >20%: wide spread likely reflects mixed machine ages/conditions — verify base value manually.");
+          // NOTE: No automatic base cut. Mixed-age comp pools routinely produce >20% spread
+          // without reflecting true pricing uncertainty on a year-filtered basis.
         }
       }
 
@@ -768,14 +769,15 @@ Core goals:
    - IMPORTANT: Try to use the exact listing URL first.
    - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
    - If still not reliable, set fields to null (do not guess).
-3) Estimate Base Market Value using grounded search comps. PRIORITIZE actual sold/hammer prices over asking prices. If 2+ soldComps are found, anchor baseMarketValueUSD to their median.
+3) Estimate Base Market Value — anchor to soldComps median when 2+ year-filtered sold results exist. Otherwise use year-filtered asking comps with a 10-15% discount.
 4) Find up to 8 real comparable ASKING PRICE listings (same make/model, nearby years) for the "comps" array. Include the subject machine itself as the first entry.
-5) SEPARATELY, search for actual auction SOLD prices for the "soldComps" array — up to 6 results.
+5) SEPARATELY, search for actual auction SOLD prices for the "soldComps" array — up to 6 results, preferring the last 18 months.
 
-SOLD PRICE SOURCES (search these for soldComps — all are free, no login required):
+SOLD PRICE SOURCES (search these for soldComps — all free, no login required):
 - Purple Wave: purplewave.com — no-reserve auctions, all contract/sold prices public. Search: site:purplewave.com [make] [model] "contract price"
-- AuctionTime: auctiontime.com — weekly online auctions with public results. Search: site:auctiontime.com [make] [model] sold
-- MachineryTrader auction results: machinerytrader.com/listings/auction-results — sold results from multiple houses
+- GovPlanet: govplanet.com — government surplus equipment, fully public sold results. Search: site:govplanet.com [make] [model] sold
+- AuctionTime: auctiontime.com — weekly online auctions with public results.
+- MachineryTrader auction results: machinerytrader.com/listings/auction-results
 
 ASKING PRICE SOURCES (for comps array only):
 - MachineryTrader.com, TractorHouse.com, Machinio.com, IronPlanet.com, EquipmentTrader.com
@@ -789,8 +791,18 @@ Rules:
 - Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
 - Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
 - For comps: only include entries where you have a real price (not "call for price"). Convert foreign currency to USD if needed.
-- For soldComps: only include entries with a confirmed hammer/contract price. Include sale date if available.
 - PREFER sold/auction prices over asking prices for baseMarketValueUSD. If using only asking prices, apply a 10-15% discount to estimate realistic transaction price.
+
+YEAR FILTERING — CRITICAL:
+- When calculating baseMarketValueUSD and sourcesSpreadPct, ONLY use comps within ±3 years of the subject machine's year.
+- Do NOT let old machines (e.g., 2006–2010 units) drag down the base value of a 2016+ machine.
+- If the subject year is unknown, use the median year of available comps as the anchor.
+- The comps array may include machines outside ±3 years for reference, but clearly note them and exclude them from the base value calculation.
+
+RECENCY — SOLD COMPS:
+- For soldComps, prefer results from the last 18 months. Include older results only if recent data is unavailable, and note the age.
+- Set saleDate in soldComps whenever available (format: M/YYYY or MM/DD/YYYY).
+- When anchoring baseMarketValueUSD to soldComps median, only use soldComps that are within ±3 years of the subject.
 
 SCHEMA:
 {
@@ -1266,7 +1278,6 @@ RISK FLAGS examples:
               + '</tr>';
           }).join('');
 
-          // Chart data: only entries with both hours and price
           const soldChartData = soldComps
             .filter(c => c.hours !== null && c.hours !== undefined && c.soldPriceUSD)
             .map(c => ({ x: c.hours, y: c.soldPriceUSD }));
@@ -1274,7 +1285,7 @@ RISK FLAGS examples:
           soldCompsBlock = ''
             + '<div id="sold-comps-block" class="p-4 rounded-2xl border bg-white">'
             + '<div class="text-lg font-bold text-gray-900 mb-1">Auction Sold Prices</div>'
-            + '<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">Actual hammer/contract prices from public no-login auction sources (Purple Wave, AuctionTime, MachineryTrader Auction Results)</div>'
+            + '<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">Actual hammer/contract prices from public no-login auction sources (Purple Wave, GovPlanet, AuctionTime, MachineryTrader Auction Results). Year-filtered to ±3 years of subject.</div>'
             + (soldChartData.length > 0
                 ? '<div style="position:relative;width:100%;height:220px;margin-bottom:16px;"><canvas id="' + soldChartId + '"></canvas></div>'
                 : '')
@@ -1392,9 +1403,11 @@ RISK FLAGS examples:
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 10;
 
-        // Page 1: report — hide comps block so it doesn't appear here
+        // Page 1: report — hide comps and sold comps blocks so they don't appear here
         const compsEl = document.getElementById('comps-block');
+        const soldCompsEl = document.getElementById('sold-comps-block');
         if (compsEl) compsEl.style.display = 'none';
+        if (soldCompsEl) soldCompsEl.style.display = 'none';
 
         const canvas = await html2canvas(reportElement, { scale: 2 });
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
@@ -1403,7 +1416,7 @@ RISK FLAGS examples:
         doc.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
         addFooter(doc, margin, pageHeight);
 
-        // Page 2: comps chart + table (if present)
+        // Page 2: Market Comps (if present)
         if (compsEl) {
           compsEl.style.display = 'block';
           doc.addPage();
@@ -1420,8 +1433,8 @@ RISK FLAGS examples:
         }
 
         // Page 3: Auction Sold Prices (if present)
-        const soldCompsEl = document.getElementById('sold-comps-block');
         if (soldCompsEl) {
+          soldCompsEl.style.display = 'block';
           doc.addPage();
           doc.setFontSize(14);
           doc.setTextColor(0);
