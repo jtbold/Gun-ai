@@ -768,20 +768,19 @@ Core goals:
    - IMPORTANT: Try to use the exact listing URL first.
    - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
    - If still not reliable, set fields to null (do not guess).
-3) Estimate Base Market Value using grounded search comps. PRIORITIZE actual sold/hammer prices over asking prices.
-4) Find up to 8 real comparable listings for this machine (same make/model, nearby years) using Google Search grounding. Include the subject machine itself as the first entry.
+3) Estimate Base Market Value using grounded search comps. PRIORITIZE actual sold/hammer prices over asking prices. If 2+ soldComps are found, anchor baseMarketValueUSD to their median.
+4) Find up to 8 real comparable ASKING PRICE listings (same make/model, nearby years) for the "comps" array. Include the subject machine itself as the first entry.
+5) SEPARATELY, search for actual auction SOLD prices for the "soldComps" array — up to 6 results.
 
-PREFERRED PRICING SOURCES (search these first, in priority order):
-- Ritchie Bros. Price Results: rbauction.com/equipment-values-auction-results (actual sold prices)
-- IronPlanet auction results: ironplanet.com (actual sold prices with inspection ratings)
-- AuctionValues.com (aggregated actual auction results)
-- Construction Equipment Guide auction results: constructionequipmentguide.com/auction-results (10 years of actual sale prices)
-- Equipmentfacts.com (live and onsite auction results)
-- MachineryTrader.com (current asking prices — use if sold data unavailable)
-- TractorHouse.com (current asking prices — use if sold data unavailable)
-- Machinio.com (current asking prices — use if sold data unavailable)
+SOLD PRICE SOURCES (search these for soldComps — all are free, no login required):
+- Purple Wave: purplewave.com — no-reserve auctions, all contract/sold prices public. Search: site:purplewave.com [make] [model] "contract price"
+- AuctionTime: auctiontime.com — weekly online auctions with public results. Search: site:auctiontime.com [make] [model] sold
+- MachineryTrader auction results: machinerytrader.com/listings/auction-results — sold results from multiple houses
 
-When reporting comps, note whether the price is a SOLD price (auction result) or ASKING price (listing). Set the "source" field to include this — e.g. "Ritchie Bros. (sold)" or "MachineryTrader (asking)".
+ASKING PRICE SOURCES (for comps array only):
+- MachineryTrader.com, TractorHouse.com, Machinio.com, IronPlanet.com, EquipmentTrader.com
+
+When reporting comps, note whether the price is a SOLD price or ASKING price in the "source" field — e.g. "Purple Wave (sold)" or "MachineryTrader (asking)".
 
 Return ONLY clean JSON (no markdown) in the exact schema below.
 Rules:
@@ -790,6 +789,7 @@ Rules:
 - Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
 - Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
 - For comps: only include entries where you have a real price (not "call for price"). Convert foreign currency to USD if needed.
+- For soldComps: only include entries with a confirmed hammer/contract price. Include sale date if available.
 - PREFER sold/auction prices over asking prices for baseMarketValueUSD. If using only asking prices, apply a 10-15% discount to estimate realistic transaction price.
 
 SCHEMA:
@@ -829,6 +829,18 @@ SCHEMA:
         "hours": "number|null",
         "priceUSD": "number|null",
         "config": "string|null",
+        "source": "string|null"
+      }
+    ],
+    "soldComps": [
+      {
+        "year": "number|null",
+        "make": "string|null",
+        "model": "string|null",
+        "hours": "number|null",
+        "soldPriceUSD": "number|null",
+        "saleDate": "string|null",
+        "location": "string|null",
         "source": "string|null"
       }
     ]
@@ -1233,6 +1245,83 @@ RISK FLAGS examples:
           }, 100);
         }
 
+        // ---- Auction Sold Comps Block ----
+        const soldComps = report?.market?.soldComps;
+        let soldCompsBlock = '';
+        if (soldComps && soldComps.length > 0) {
+          const soldChartId = 'sold-comps-chart-' + Date.now();
+
+          const soldTableRows = soldComps.map(c => {
+            const price = c.soldPriceUSD ? '$' + c.soldPriceUSD.toLocaleString() : 'N/A';
+            const hrs = (c.hours !== null && c.hours !== undefined) ? c.hours.toLocaleString() : 'N/A';
+            const date = c.saleDate || 'N/A';
+            const loc  = c.location || '';
+            return '<tr style="border-bottom:1px solid #F3F4F6;">'
+              + '<td style="padding:6px 10px;font-weight:500;">' + (c.year||'') + ' ' + (c.make||'') + ' ' + (c.model||'') + '</td>'
+              + '<td style="padding:6px 10px;">' + hrs + '</td>'
+              + '<td style="padding:6px 10px;color:#15803D;font-weight:600;">' + price + '</td>'
+              + '<td style="padding:6px 10px;font-size:12px;color:#6B7280;">' + date + '</td>'
+              + '<td style="padding:6px 10px;font-size:12px;color:#6B7280;">' + loc + '</td>'
+              + '<td style="padding:6px 10px;font-size:12px;color:#6B7280;">' + (c.source||'') + '</td>'
+              + '</tr>';
+          }).join('');
+
+          // Chart data: only entries with both hours and price
+          const soldChartData = soldComps
+            .filter(c => c.hours !== null && c.hours !== undefined && c.soldPriceUSD)
+            .map(c => ({ x: c.hours, y: c.soldPriceUSD }));
+
+          soldCompsBlock = ''
+            + '<div id="sold-comps-block" class="p-4 rounded-2xl border bg-white">'
+            + '<div class="text-lg font-bold text-gray-900 mb-1">Auction Sold Prices</div>'
+            + '<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">Actual hammer/contract prices from public no-login auction sources (Purple Wave, AuctionTime, MachineryTrader Auction Results)</div>'
+            + (soldChartData.length > 0
+                ? '<div style="position:relative;width:100%;height:220px;margin-bottom:16px;"><canvas id="' + soldChartId + '"></canvas></div>'
+                : '')
+            + '<div style="overflow-x:auto;">'
+            + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            + '<thead><tr style="border-bottom:2px solid #D1FAE5;">'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Machine</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Hours</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#15803D;">Sold Price</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Sale Date</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Location</th>'
+            + '<th style="text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#6B7280;">Source</th>'
+            + '</tr></thead>'
+            + '<tbody>' + soldTableRows + '</tbody>'
+            + '</table></div></div>';
+
+          if (soldChartData.length > 0) {
+            const soldChartIdRef = soldChartId;
+            setTimeout(() => {
+              const el = document.getElementById(soldChartIdRef);
+              if (!el || typeof Chart === 'undefined') return;
+              new Chart(el, {
+                type: 'scatter',
+                data: {
+                  datasets: [{
+                    label: 'Sold Price',
+                    data: soldChartData,
+                    backgroundColor: '#16A34A',
+                    pointRadius: 8,
+                    pointHoverRadius: 10
+                  }]
+                },
+                options: {
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) { return ctx.raw.x.toLocaleString() + ' hrs — SOLD $' + ctx.raw.y.toLocaleString(); } } }
+                  },
+                  scales: {
+                    x: { title: { display: true, text: 'Hours' }, ticks: { callback: function(v) { return v.toLocaleString(); } } },
+                    y: { title: { display: true, text: 'Sold Price (USD)' }, ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } } }
+                  }
+                }
+              });
+            }, 150);
+          }
+        }
 
         const disclaimerBlock = `
           <div class="p-4 mt-2 bg-yellow-50 text-sm text-yellow-900 rounded-xl border border-yellow-100">
@@ -1250,6 +1339,7 @@ RISK FLAGS examples:
           ${dealBlock}
           ${riskBlock}
           ${compsBlock}
+          ${soldCompsBlock}
           <div class="p-4 rounded-2xl border bg-gray-50">${sourcesHtml}</div>
           ${disclaimerBlock}
         `;
@@ -1327,6 +1417,22 @@ RISK FLAGS examples:
           const compsImgW = pageWidth - margin * 2;
           const compsImgH = (compsCanvas.height * compsImgW) / compsCanvas.width;
           doc.addImage(compsImgData, 'JPEG', margin, margin + 10, compsImgW, compsImgH);
+        }
+
+        // Page 3: Auction Sold Prices (if present)
+        const soldCompsEl = document.getElementById('sold-comps-block');
+        if (soldCompsEl) {
+          doc.addPage();
+          doc.setFontSize(14);
+          doc.setTextColor(0);
+          doc.text("Auction Sold Prices", margin, margin + 4);
+          addFooter(doc, margin, pageHeight);
+
+          const soldCanvas = await html2canvas(soldCompsEl, { scale: 2 });
+          const soldImgData = soldCanvas.toDataURL('image/jpeg', 0.85);
+          const soldImgW = pageWidth - margin * 2;
+          const soldImgH = (soldCanvas.height * soldImgW) / soldCanvas.width;
+          doc.addImage(soldImgData, 'JPEG', margin, margin + 10, soldImgW, soldImgH);
         }
 
         // Page 3+: Reference images — 25% smaller (~57mm wide, fits 3 per row)
