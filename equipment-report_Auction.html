@@ -769,9 +769,9 @@ Core goals:
    - IMPORTANT: Try to use the exact listing URL first.
    - If the URL is not directly readable (JS-rendered / blocked), use Google Search grounding to find indexed information and reputable mirrors.
    - If still not reliable, set fields to null (do not guess).
-3) Estimate Base Market Value — anchor to soldComps median when 2+ year-filtered sold results exist. Otherwise use year-filtered asking comps with a 10-15% discount.
+3) Estimate Base Market Value using year-filtered asking price comps (±3 years of subject). Apply a 10-15% discount to asking prices to estimate realistic transaction/wholesale value. baseMarketValueUSD represents fair retail market value — NOT auction liquidation value.
 4) Find up to 8 real comparable ASKING PRICE listings (same make/model, nearby years) for the "comps" array. Include the subject machine itself as the first entry.
-5) SEPARATELY, search for actual auction SOLD prices for the "soldComps" array — up to 6 results, preferring the last 18 months.
+5) SEPARATELY, search for actual auction SOLD prices for the "soldComps" array — up to 6 results, preferring the last 18 months. These represent the auction floor / liquidation value and are displayed separately for reference ONLY — do NOT use them to set baseMarketValueUSD.
 
 SOLD PRICE SOURCES (search these for soldComps — all free, no login required):
 - Purple Wave: purplewave.com — no-reserve auctions, all contract/sold prices public. Search: site:purplewave.com [make] [model] "contract price"
@@ -791,7 +791,7 @@ Rules:
 - Provide listingExtractionConfidence ("High"|"Medium"|"Low") based on how directly you could verify the listing fields.
 - Provide "listingSourcesUsedCount" and "listingSourcesSpreadPct" for the asking price if you found multiple sources.
 - For comps: only include entries where you have a real price (not "call for price"). Convert foreign currency to USD if needed.
-- PREFER sold/auction prices over asking prices for baseMarketValueUSD. If using only asking prices, apply a 10-15% discount to estimate realistic transaction price.
+- baseMarketValueUSD must be derived from ASKING PRICE comps only (with 10-15% discount applied). Never use auction sold/hammer prices to set this field — those belong in soldComps only.
 
 YEAR FILTERING — CRITICAL:
 - When calculating baseMarketValueUSD and sourcesSpreadPct, ONLY use comps within ±3 years of the subject machine's year.
@@ -802,7 +802,7 @@ YEAR FILTERING — CRITICAL:
 RECENCY — SOLD COMPS:
 - For soldComps, prefer results from the last 18 months. Include older results only if recent data is unavailable, and note the age.
 - Set saleDate in soldComps whenever available (format: M/YYYY or MM/DD/YYYY).
-- When anchoring baseMarketValueUSD to soldComps median, only use soldComps that are within ±3 years of the subject.
+- soldComps are for reference only — they show the auction floor price, not fair market value.
 
 SCHEMA:
 {
@@ -1285,7 +1285,7 @@ RISK FLAGS examples:
           soldCompsBlock = ''
             + '<div id="sold-comps-block" class="p-4 rounded-2xl border bg-white">'
             + '<div class="text-lg font-bold text-gray-900 mb-1">Auction Sold Prices</div>'
-            + '<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">Actual hammer/contract prices from public no-login auction sources (Purple Wave, GovPlanet, AuctionTime, MachineryTrader Auction Results). Year-filtered to ±3 years of subject.</div>'
+            + '<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">⚠️ Auction floor prices — no-reserve liquidation results from Purple Wave, GovPlanet, AuctionTime. These represent the <strong>minimum you could expect at forced auction</strong>, not fair retail market value. Use as downside reference only.</div>'
             + (soldChartData.length > 0
                 ? '<div style="position:relative;width:100%;height:220px;margin-bottom:16px;"><canvas id="' + soldChartId + '"></canvas></div>'
                 : '')
